@@ -1,8 +1,5 @@
-import type { ReactNode } from 'react';
 import { AppShell } from '@/components/AppShell';
 
-export const dynamic = 'force-dynamic';
-
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return <AppShell>{children}</AppShell>;
 }

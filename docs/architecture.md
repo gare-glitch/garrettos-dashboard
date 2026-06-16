@@ -21,15 +21,8 @@ OpenClaw actions that can mutate code, deploy infrastructure, spend money, or co
 
 The AI Mentor page is intentionally UI-only in Phase 1. Phase 2 should add server endpoints that select Anthropic, LiteLLM, Ollama, or the OpenClaw VPS bridge without exposing provider keys to the browser.
 
-## Phase 2 scaffolding
+## Phase 2 clean scaffolding
 
-Phase 2 introduces database-backed read paths with mock fallbacks. Dashboard pages call server-side data loaders that read Supabase through the authenticated session when environment variables and cookies are available. If the database has no rows yet, the UI falls back to Phase 1 mock data so deployment stays reviewable.
+This branch intentionally keeps the Phase 1 dashboard UI unchanged. Phase 2 adds only the integration edges needed for backend work: Supabase browser/server helpers, the auth callback route, API placeholders for Garmin/Obsidian/OpenClaw/VPS, and a small user-scoped migration for integration queues and snapshots.
 
-API route scaffolds are intentionally thin:
-
-- `POST /api/garmin/import` validates CSV/FIT/TCX filenames and records a dashboard event for future parsers.
-- `POST /api/obsidian/sync` records an Obsidian sync event for future note ingestion and chunking.
-- `GET /api/openclaw/status` reads agent runs and annotates which statuses require approval.
-- `GET /api/vps/metrics` reads VPS snapshots and normalizes health status.
-
-These routes require a Supabase-authenticated user. Future server workers may use service-role credentials, but those keys must remain server-only.
+The browser receives only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Service-role keys, OpenClaw tokens, VPS credentials, and future AI provider keys remain server-only environment variables.

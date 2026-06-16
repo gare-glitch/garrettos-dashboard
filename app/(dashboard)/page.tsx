@@ -1,11 +1,9 @@
 import Link from 'next/link';
 import { Card } from '@/components/Card';
 import { MiniChart } from '@/components/MiniChart';
-import { launcher } from '@/data/mock';
-import { getAgentRuns, getHealthData, getProjectData } from '@/lib/dashboard-data';
+import { agentRuns, garminDaily, launcher, projects } from '@/data/mock';
 
-export default async function HomePage() {
-  const [garminDaily, agentRuns, projects] = await Promise.all([getHealthData(), getAgentRuns(), getProjectData()]);
+export default function HomePage() {
   const today = garminDaily.at(-1)!;
   return <div className="page-stack">
     <section className="hero-panel">

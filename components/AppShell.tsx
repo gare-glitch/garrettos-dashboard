@@ -1,11 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { navItems, ticker } from '@/data/mock';
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return <div className="app-shell">
     <header className="topbar">

@@ -35,17 +35,7 @@ create table dashboard_events (id uuid primary key default gen_random_uuid(), us
 
 alter table goals enable row level security; alter table daily_checkins enable row level security; alter table water_logs enable row level security; alter table supplements enable row level security; alter table supplement_logs enable row level security; alter table gym_exercises enable row level security; alter table gym_workouts enable row level security; alter table gym_sets enable row level security; alter table body_weight_logs enable row level security; alter table progress_photos enable row level security; alter table garmin_daily_summaries enable row level security; alter table garmin_sleep_summaries enable row level security; alter table garmin_activities enable row level security; alter table garmin_hrv enable row level security; alter table garmin_stress enable row level security; alter table agent_runs enable row level security; alter table agent_actions enable row level security; alter table agent_approvals enable row level security; alter table obsidian_notes enable row level security; alter table memory_chunks enable row level security; alter table vps_hosts enable row level security; alter table vps_metrics enable row level security; alter table projects enable row level security; alter table project_tasks enable row level security; alter table revenue_events enable row level security; alter table dashboard_events enable row level security;
 
--- Owner-only RLS policy generator for every Phase 2 table. This keeps anon clients scoped
--- to rows where auth.uid() matches user_id; service-role clients bypass RLS only on server.
-do $$
-declare
-  table_name text;
-begin
-  foreach table_name in array array[
-    'goals','daily_checkins','water_logs','supplements','supplement_logs','gym_exercises','gym_workouts','gym_sets','body_weight_logs','progress_photos','garmin_daily_summaries','garmin_sleep_summaries','garmin_activities','garmin_hrv','garmin_stress','agent_runs','agent_actions','agent_approvals','obsidian_notes','memory_chunks','vps_hosts','vps_metrics','projects','project_tasks','revenue_events','dashboard_events'
-  ]
-  loop
-    execute format('drop policy if exists %I on %I', table_name || ' owner access', table_name);
-    execute format('create policy %I on %I for all using (auth.uid() = user_id) with check (auth.uid() = user_id)', table_name || ' owner access', table_name);
-  end loop;
-end $$;
+-- Draft policy pattern: generate one owner-only policy per table in production migrations.
+-- Example:
+create policy "goals are user scoped" on goals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "agent approvals are user scoped" on agent_approvals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

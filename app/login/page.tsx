@@ -1,6 +1,5 @@
 'use client';
 
-import type { ChangeEvent } from 'react';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase';
 
@@ -18,5 +17,5 @@ export default function LoginPage() {
     }
   }
 
-  return <main className="login-shell"><section className="login-card"><div className="eyebrow">Private access</div><h1>Sign in to GarrettOS</h1><p className="sub">Supabase Auth gates the dashboard. No service-role keys are used in the browser.</p><input value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} placeholder="you@example.com" type="email"/><button className="button" onClick={signIn}>Send magic link</button><p className="sub">{message}</p></section></main>;
+  return <main className="login-shell"><section className="login-card"><div className="eyebrow">Private access</div><h1>Sign in to GarrettOS</h1><p className="sub">Supabase Auth gates the dashboard. No service-role keys are used in the browser.</p><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" type="email"/><button className="button" onClick={signIn}>Send magic link</button><p className="sub">{message}</p></section></main>;
 }

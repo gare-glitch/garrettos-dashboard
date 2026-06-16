@@ -3,23 +3,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.49.8",
-    "next": "^15.3.5",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "@supabase/ssr": "latest",
+    "@supabase/supabase-js": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
   },
   "devDependencies": {
-    "@types/node": "^22.15.30",
-    "@types/react": "^19.0.12",
-    "@types/react-dom": "^19.0.4",
-    "eslint": "^9.28.0",
-    "eslint-config-next": "^15.3.5",
-    "typescript": "^5.8.3",
-    "@eslint/eslintrc": "^3.3.1"
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "typescript": "latest"
   }
 }
