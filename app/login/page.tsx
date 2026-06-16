@@ -10,7 +10,10 @@ export default function LoginPage() {
   async function signIn() {
     try {
       const supabase = createClient();
+codex/build-garrettos-personal-life-dashboard-g2672w
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${location.origin}/auth/callback` } });
       const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } });
+main
       setMessage(error ? error.message : 'Magic link sent. Check your inbox.');
     } catch {
       setMessage('Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel first.');

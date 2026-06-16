@@ -5,7 +5,11 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+codex/build-garrettos-personal-life-dashboard-g2672w
+  if (!url || !anon || request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth/callback')) return response;
+
   if (!url || !anon || request.nextUrl.pathname.startsWith('/login')) return response;
+main
 
   const supabase = createServerClient(url, anon, {
     cookies: {

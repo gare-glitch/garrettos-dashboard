@@ -20,3 +20,12 @@ OpenClaw actions that can mutate code, deploy infrastructure, spend money, or co
 ## AI providers
 
 The AI Mentor page is intentionally UI-only in Phase 1. Phase 2 should add server endpoints that select Anthropic, LiteLLM, Ollama, or the OpenClaw VPS bridge without exposing provider keys to the browser.
+codex/build-garrettos-personal-life-dashboard-g2672w
+
+## Phase 2 clean scaffolding
+
+This branch intentionally keeps the Phase 1 dashboard UI unchanged. Phase 2 adds only the integration edges needed for backend work: Supabase browser/server helpers, the auth callback route, API placeholders for Garmin/Obsidian/OpenClaw/VPS, and a small user-scoped migration for integration queues and snapshots.
+
+The browser receives only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Service-role keys, OpenClaw tokens, VPS credentials, and future AI provider keys remain server-only environment variables.
+
+main
