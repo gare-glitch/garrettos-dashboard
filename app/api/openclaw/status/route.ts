@@ -10,6 +10,6 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data } = await supabase.from('agent_runs').select('provider,title,repo,status').order('created_at', { ascending: false }).limit(20);
-  const runs = data?.length ? data : agentRuns.map((run) => ({ provider: 'openclaw', title: run.title, repo: null, status: run.status }));
-  return NextResponse.json({ runs: runs.map((run) => normalizeOpenClawStatus({ provider: 'openclaw', title: run.title, repo: run.repo ?? undefined, status: run.status as 'queued' | 'running' | 'blocked' | 'review_needed' | 'approved' | 'completed' | 'failed' })) });
+  const runs = (data?.length ? data : agentRuns.map((run) => ({ provider: 'openclaw', title: run.title, repo: null, status: run.status }))) as Array<{ provider: string; title: string; repo: string | null; status: string }>;
+  return NextResponse.json({ runs: runs.map((run: { provider: string; title: string; repo: string | null; status: string }) => normalizeOpenClawStatus({ provider: 'openclaw', title: run.title, repo: run.repo ?? undefined, status: run.status as 'queued' | 'running' | 'blocked' | 'review_needed' | 'approved' | 'completed' | 'failed' })) });
 }
