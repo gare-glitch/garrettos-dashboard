@@ -10,6 +10,7 @@ export const navItems: NavItem[] = [
   { href: '/memory', label: 'Memory', short: 'Memory' },
   { href: '/system', label: 'System', short: 'System' },
   { href: '/projects', label: 'Projects/Revenue', short: 'Revenue' },
+  { href: '/settings', label: 'Settings', short: 'Settings' },
 ];
 
 export const ticker = [
@@ -29,6 +30,7 @@ export const launcher = [
   { href: '/memory', title: 'Memory', metric: '248', note: 'Indexed Obsidian chunks' },
   { href: '/system', title: 'System', metric: '5/6', note: 'Services online' },
   { href: '/projects', title: 'Revenue', metric: '$12.4k', note: 'Projects and events' },
+  { href: '/settings', title: 'Settings', metric: '10', note: 'Integration status center' },
 ];
 
 export const garminDaily = [
