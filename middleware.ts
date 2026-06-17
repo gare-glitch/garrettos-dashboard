@@ -4,9 +4,12 @@ import { authBypassEnabled } from '@/lib/auth-bypass';
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
+  const pathname = request.nextUrl.pathname;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (authBypassEnabled || !url || !anon || request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth/callback')) return response;
+  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth/callback');
+  const isDashboardRoute = !pathname.startsWith('/api');
+  if ((authBypassEnabled && isDashboardRoute) || !url || !anon || isAuthRoute) return response;
 
   const supabase = createServerClient(url, anon, {
     cookies: {
