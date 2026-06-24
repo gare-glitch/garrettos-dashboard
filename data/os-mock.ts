@@ -1,11 +1,29 @@
 import type { StatusTone } from '@/components/garrettos/types';
 
 export const osCommands = [
-  { id: 'cmd-health', label: 'Sync Garmin data', group: 'Health', href: '/health' },
-  { id: 'cmd-agent', label: 'Review agent approvals', group: 'Agents', href: '/openclaw' },
-  { id: 'cmd-memory', label: 'Search Obsidian memory', group: 'Memory', href: '/memory' },
-  { id: 'cmd-mentor', label: 'Ask AI mentor', group: 'AI', href: '/mentor' },
-  { id: 'cmd-system', label: 'Check VPS topology', group: 'System', href: '/system' },
+  { id: 'cmd-memory', label: 'Open Memory', group: 'Quick actions', href: '/memory', icon: 'psychology' as const },
+  { id: 'cmd-agent', label: 'Launch Agent', group: 'Quick actions', href: '/openclaw', icon: 'smart_toy' as const },
+  { id: 'cmd-tasks', label: 'Search Tasks', group: 'Quick actions', href: '/openclaw', icon: 'sync' as const },
+  { id: 'cmd-system', label: 'View System', group: 'Quick actions', href: '/system', icon: 'terminal' as const },
+  { id: 'cmd-mentor', label: 'Ask Garrett', group: 'Quick actions', href: '/mentor', icon: 'auto_awesome' as const },
+  { id: 'cmd-health', label: 'Sync Garmin data', group: 'Recent', href: '/health', icon: 'ecg_heart' as const },
+  { id: 'cmd-settings', label: 'Open Settings', group: 'Recent', href: '/settings', icon: 'settings' as const },
+];
+
+export const osShellTelemetry = {
+  cpu: '24%',
+  mem: '12.4 GB',
+  lat: '12ms',
+  api: '1.2k/hr',
+  activeModel: 'GPT-4o',
+  agentStatus: 'Active' as const,
+  activeAgents: 3,
+};
+
+export const osRecentCommands = [
+  { id: 'rc1', label: 'Search memory: architecture', timestamp: '2m ago' },
+  { id: 'rc2', label: 'Deploy OpenClaw bridge', timestamp: '14m ago' },
+  { id: 'rc3', label: 'Sync Garmin export', timestamp: '1h ago' },
 ];
 
 export const osPriorities = [
