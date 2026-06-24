@@ -8,18 +8,30 @@ export function MiniChart({
   label,
   className,
   height = 'h-24',
+  tone = 'primary',
 }: {
   values: number[];
   label: string;
   className?: string;
   height?: string;
+  tone?: 'primary' | 'secondary' | 'tertiary';
 }) {
   const max = Math.max(...values, 1);
   const reduceMotion = useReducedMotion();
 
+  const barColors = {
+    primary: 'bg-primary/80 hover:bg-primary',
+    secondary: 'bg-secondary/80 hover:bg-secondary',
+    tertiary: 'bg-tertiary/80 hover:bg-tertiary',
+  };
+
   return (
     <div
-      className={cn('flex items-end gap-1 rounded-xl border border-border bg-input/40 p-2', height, className)}
+      className={cn(
+        'flex items-end gap-1 rounded-xl border border-white/8 bg-surface-container-low/40 p-2',
+        height,
+        className,
+      )}
       role="img"
       aria-label={label}
     >
@@ -29,8 +41,12 @@ export function MiniChart({
           initial={reduceMotion ? false : { scaleY: 0 }}
           animate={{ scaleY: 1 }}
           style={{ height: `${Math.max(8, (value / max) * 100)}%`, originY: 1 }}
-          transition={reduceMotion ? { duration: 0 } : { delay: index * 0.03, type: 'spring', stiffness: 300, damping: 26 }}
-          className="min-w-[6px] flex-1 rounded-sm bg-cyan/80"
+          transition={
+            reduceMotion
+              ? { duration: 0 }
+              : { delay: index * 0.04, type: 'spring', stiffness: 300, damping: 26 }
+          }
+          className={cn('min-w-[6px] flex-1 rounded-sm transition-colors', barColors[tone])}
         />
       ))}
     </div>

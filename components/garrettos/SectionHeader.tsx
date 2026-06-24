@@ -1,6 +1,5 @@
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/design-system';
-import { GlassPanel } from './GlassPanel';
 
 export function SectionHeader({
   eyebrow,
@@ -18,7 +17,7 @@ export function SectionHeader({
   return (
     <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="min-w-0 space-y-1">
-        {eyebrow ? <p className={typography.eyebrow}>{eyebrow}</p> : null}
+        {eyebrow ? <p className={typography.eyebrowPrimary}>{eyebrow}</p> : null}
         <h2 className={typography.headline}>{title}</h2>
         {description ? <p className={typography.body}>{description}</p> : null}
       </div>
@@ -29,8 +28,8 @@ export function SectionHeader({
 
 export function SectionHeaderCompact({ title, meta }: { title: string; meta?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
-      <h3 className={typography.title}>{title}</h3>
+    <div className="flex items-center justify-between gap-2 border-b border-white/8 pb-2">
+      <h3 className={cn(typography.labelCaps, 'text-on-surface-variant')}>{title}</h3>
       {meta}
     </div>
   );
