@@ -1,19 +1,38 @@
-export type NavItem = { href: string; label: string; short: string };
+export type NavItem = {
+  href: string;
+  label: string;
+  short: string;
+  icon:
+    | 'home'
+    | 'health'
+    | 'gym'
+    | 'water'
+    | 'mentor'
+    | 'openclaw'
+    | 'memory'
+    | 'system'
+    | 'projects'
+    | 'settings';
+};
 
 export const navItems: NavItem[] = [
-  { href: '/', label: 'Home', short: 'Home' },
-  { href: '/health', label: 'Health', short: 'Health' },
-  { href: '/gym', label: 'Gym', short: 'Gym' },
-  { href: '/water', label: 'Water/Supps', short: 'Water' },
-  { href: '/mentor', label: 'AI Mentor', short: 'Mentor' },
-  { href: '/openclaw', label: 'OpenClaw', short: 'Claw' },
-  { href: '/memory', label: 'Memory', short: 'Memory' },
-  { href: '/system', label: 'System', short: 'System' },
-  { href: '/projects', label: 'Projects/Revenue', short: 'Revenue' },
-  { href: '/settings', label: 'Settings', short: 'Settings' },
+  { href: '/', label: 'Home', short: 'Home', icon: 'home' },
+  { href: '/health', label: 'Health', short: 'Health', icon: 'health' },
+  { href: '/gym', label: 'Gym', short: 'Gym', icon: 'gym' },
+  { href: '/water', label: 'Water/Supps', short: 'Water', icon: 'water' },
+  { href: '/mentor', label: 'AI Mentor', short: 'Mentor', icon: 'mentor' },
+  { href: '/openclaw', label: 'OpenClaw', short: 'Claw', icon: 'openclaw' },
+  { href: '/memory', label: 'Memory', short: 'Memory', icon: 'memory' },
+  { href: '/system', label: 'System', short: 'System', icon: 'system' },
+  { href: '/projects', label: 'Projects/Revenue', short: 'Revenue', icon: 'projects' },
+  { href: '/settings', label: 'Settings', short: 'Settings', icon: 'settings' },
 ];
 
-export const ticker = [
+export type TickerTone = 'good' | 'warn' | 'info';
+
+export type TickerItem = { label: string; value: string; tone: TickerTone };
+
+export const ticker: TickerItem[] = [
   { label: 'Garmin', value: 'Recovery 89', tone: 'good' },
   { label: 'OpenClaw', value: '3 runs active', tone: 'info' },
   { label: 'VPS', value: 'Hetzner healthy', tone: 'good' },
