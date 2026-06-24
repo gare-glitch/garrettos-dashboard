@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
+import { GlassPanel } from '@/components/garrettos';
 import { createClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
 export default function LoginPage() {
@@ -29,43 +29,35 @@ export default function LoginPage() {
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 24 }}
+        initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 28 }}
         className="w-full max-w-md"
       >
-        <Card className="glow-ring overflow-hidden rounded-3xl">
-          <CardHeader className="space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-cyan to-violet text-base font-black text-primary-foreground">
-                G
-              </span>
-              <div>
-                <CardDescription className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan">
-                  Private access
-                </CardDescription>
-                <CardTitle className="text-2xl">Sign in to GarrettOS</CardTitle>
-              </div>
+        <GlassPanel className="glow-ring p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-xl border border-cyan/20 bg-cyan/10 text-sm font-bold text-cyan">G</span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan">Private access</p>
+              <h1 className="text-xl font-semibold tracking-tight">Sign in to GarrettOS</h1>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Supabase Auth gates the dashboard. No service-role keys are used in the browser.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              type="email"
-              autoComplete="email"
-            />
-            <Button className="w-full" onClick={signIn}>
-              <Sparkles className="size-4" />
-              Send magic link
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">{message}</p>
-          </CardContent>
-        </Card>
+          </div>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Supabase Auth gates the dashboard. No service-role keys are used in the browser.
+          </p>
+          <Input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            type="email"
+            autoComplete="email"
+          />
+          <Button className="mt-3 w-full" onClick={signIn}>
+            <Sparkles className="size-4" />
+            Send magic link
+          </Button>
+          <p className="mt-3 text-center text-sm text-muted-foreground">{message}</p>
+        </GlassPanel>
       </motion.div>
     </main>
   );

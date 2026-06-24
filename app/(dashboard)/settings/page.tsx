@@ -1,8 +1,5 @@
-import { Card } from '@/components/Card';
-import { DataRow } from '@/components/DataRow';
-import { PageHeader } from '@/components/PageHeader';
-import { DashboardGrid } from '@/components/layout-grid';
-import { Badge } from '@/components/ui/badge';
+import { GlassPanel, SectionHeader, SectionHeaderCompact, StatusChip } from '@/components/garrettos';
+import { spacing } from '@/lib/design-system';
 import { cn } from '@/lib/utils';
 
 type IntegrationStatus = 'connected' | 'mocked' | 'missing env' | 'error';
@@ -51,67 +48,68 @@ function getStatus(integration: Integration): IntegrationStatus {
   return 'connected';
 }
 
-function statusVariant(status: IntegrationStatus): 'success' | 'default' | 'warning' | 'destructive' {
-  if (status === 'connected') return 'success';
-  if (status === 'mocked') return 'default';
-  if (status === 'missing env') return 'warning';
-  return 'destructive';
+function statusTone(status: IntegrationStatus): 'good' | 'warn' | 'info' | 'bad' | 'idle' {
+  if (status === 'connected') return 'good';
+  if (status === 'mocked') return 'info';
+  if (status === 'missing env') return 'warn';
+  return 'bad';
 }
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className={spacing.page}>
+      <SectionHeader
         eyebrow="Settings"
         title="Integration Status Center"
         description="Control center for what is connected, what is mocked, and what needs setup next."
       />
 
-      <DashboardGrid>
-        <Card title="Onboarding checklist" eyebrow="Setup" className="md:col-span-12">
-          <ul className="grid gap-2 md:grid-cols-3">
-            {checklist.map((item) => (
-              <li
-                key={item.label}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium',
-                  item.done ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                <span
-                  className={cn(
-                    'grid size-6 place-items-center rounded-full text-xs',
-                    item.done ? 'bg-green/15 text-green' : 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  {item.done ? '✓' : '•'}
-                </span>
-                {item.label}
-              </li>
-            ))}
-          </ul>
-        </Card>
+      <GlassPanel className="p-4">
+        <SectionHeaderCompact title="Onboarding checklist" meta={<StatusChip label={`${checklist.filter((c) => c.done).length}/${checklist.length}`} tone="info" />} />
+        <ul className="mt-3 grid gap-2 md:grid-cols-3">
+          {checklist.map((item) => (
+            <li
+              key={item.label}
+              className={cn(
+                'flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium',
+                item.done ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              <span className={cn('grid size-5 place-items-center rounded-full text-[10px]', item.done ? 'bg-green/15 text-green' : 'bg-muted text-muted-foreground')}>
+                {item.done ? '✓' : '•'}
+              </span>
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      </GlassPanel>
 
+      <div className="os-bento">
         {integrations.map((integration) => {
           const status = getStatus(integration);
           return (
-            <Card title={integration.name} eyebrow="Integration" className="md:col-span-6" key={integration.name}>
-              <DataRow label="Status" value={<Badge variant={statusVariant(status)}>{status}</Badge>} />
-              <div className="space-y-2 border-t border-border py-3">
-                <small className="text-xs text-muted-foreground">Required env vars</small>
-                <code className="block rounded-xl border border-border bg-input/70 p-3 text-xs text-cyan">
-                  {integration.env.join(', ')}
-                </code>
+            <GlassPanel key={integration.name} className="col-span-2 p-4 md:col-span-6">
+              <SectionHeaderCompact title={integration.name} meta={<StatusChip label={status} tone={statusTone(status)} />} />
+              <div className="mt-3 space-y-3 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Required env vars</p>
+                  <code className="mt-1 block rounded-lg border border-border bg-input/50 p-2 font-mono text-[10px] text-cyan">
+                    {integration.env.join(', ')}
+                  </code>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Next setup step</p>
+                  <p className="mt-1 text-muted-foreground">{integration.nextStep}</p>
+                </div>
+                <div className="flex justify-between border-t border-border/60 pt-2">
+                  <span className="text-muted-foreground">Last checked</span>
+                  <span>Not checked yet</span>
+                </div>
               </div>
-              <div className="space-y-2 border-t border-border py-3">
-                <small className="text-xs text-muted-foreground">Next setup step</small>
-                <p className="text-sm text-muted-foreground">{integration.nextStep}</p>
-              </div>
-              <DataRow label="Last checked" value="Not checked yet" />
-            </Card>
+            </GlassPanel>
           );
         })}
-      </DashboardGrid>
+      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ export function MetricCard({
   tone = 'idle',
   sparkline,
   footer,
+  children,
   className,
   compact,
 }: {
@@ -23,6 +24,7 @@ export function MetricCard({
   tone?: StatusTone;
   sparkline?: React.ReactNode;
   footer?: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
   compact?: boolean;
 }) {
@@ -46,6 +48,7 @@ export function MetricCard({
         </div>
         <div className={compact ? 'text-2xl font-bold tabular-nums' : typography.metric}>{value}</div>
         {sparkline}
+        {children}
         {footer ? <p className={typography.body}>{footer}</p> : null}
       </motion.div>
     </GlassPanel>
