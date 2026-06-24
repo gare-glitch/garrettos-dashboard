@@ -89,4 +89,10 @@
       0 0 0 1px rgba(56, 189, 248, 0.2),
       0 0 40px rgba(56, 189, 248, 0.08);
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
 }

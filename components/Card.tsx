@@ -27,23 +27,4 @@ export function PanelCard({
   );
 }
 
-/** @deprecated Use PanelCard instead */
-export function CardLegacy({
-  title,
-  eyebrow,
-  children,
-  className = '',
-}: {
-  title: string;
-  eyebrow?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <PanelCard title={title} eyebrow={eyebrow} className={className}>
-      {children}
-    </PanelCard>
-  );
-}
-
 export { PanelCard as Card };
