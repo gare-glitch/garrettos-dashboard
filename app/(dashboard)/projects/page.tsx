@@ -1,6 +1,32 @@
 import { Card } from '@/components/Card';
+import { DataRow } from '@/components/DataRow';
+import { MetricCard } from '@/components/MetricCard';
+import { PageHeader } from '@/components/PageHeader';
+import { DashboardGrid } from '@/components/layout-grid';
 import { projects } from '@/data/mock';
 
 export default function ProjectsPage() {
-  return <div className="page-stack"><div><p className="eyebrow">Projects / Revenue</p><h1>Project execution and revenue signals</h1></div><section className="dashboard-grid"><Card title="Active projects" className="span-8">{projects.map((project) => <div className="row" key={project.name}><span>{project.name}<small>{project.status} • Next: {project.next}</small></span><b>{project.revenue}</b></div>)}</Card><Card title="Revenue events" className="span-4"><div className="metric">$12.4k</div><p className="muted">Mock month-to-date revenue before Stripe/accounting integrations.</p></Card></section></div>;
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Projects / Revenue" title="Project execution and revenue signals" />
+      <DashboardGrid>
+        <Card title="Active projects" className="md:col-span-8">
+          {projects.map((project) => (
+            <DataRow
+              key={project.name}
+              label={project.name}
+              value={project.revenue}
+              hint={`${project.status} • Next: ${project.next}`}
+            />
+          ))}
+        </Card>
+        <MetricCard
+          title="Revenue events"
+          value="$12.4k"
+          description="Mock month-to-date revenue before Stripe/accounting integrations."
+          className="md:col-span-4"
+        />
+      </DashboardGrid>
+    </div>
+  );
 }

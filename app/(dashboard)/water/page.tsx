@@ -1,6 +1,36 @@
 import { Card } from '@/components/Card';
+import { DataRow } from '@/components/DataRow';
+import { MetricCard } from '@/components/MetricCard';
+import { PageHeader } from '@/components/PageHeader';
+import { DashboardGrid } from '@/components/layout-grid';
+import { Input } from '@/components/ui/input';
 import { supplements } from '@/data/mock';
+import { cn } from '@/lib/utils';
 
 export default function WaterPage() {
-  return <div className="page-stack"><div><p className="eyebrow">Water / Supplements</p><h1>Hydration and dose schedule</h1></div><section className="dashboard-grid"><Card title="Adaptive water target" className="span-4"><div className="metric">120 oz</div><p className="muted">Based on body weight, activity, caffeine, and stimulant load.</p><input placeholder="Log ounces" /></Card><Card title="Supplement inventory" className="span-8">{supplements.map((item) => <div className="row" key={item.name}><span>{item.slot}: {item.name}</span><b className={item.status === 'low' ? 'warn' : 'good'}>{item.inventory} left • {item.status}</b></div>)}</Card></section></div>;
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Water / Supplements" title="Hydration and dose schedule" />
+      <DashboardGrid>
+        <MetricCard
+          title="Adaptive water target"
+          value="120 oz"
+          description="Based on body weight, activity, caffeine, and stimulant load."
+          className="md:col-span-4"
+        >
+          <Input placeholder="Log ounces" />
+        </MetricCard>
+        <Card title="Supplement inventory" className="md:col-span-8">
+          {supplements.map((item) => (
+            <DataRow
+              key={item.name}
+              label={`${item.slot}: ${item.name}`}
+              value={`${item.inventory} left • ${item.status}`}
+              valueClassName={cn(item.status === 'low' ? 'text-amber' : 'text-green')}
+            />
+          ))}
+        </Card>
+      </DashboardGrid>
+    </div>
+  );
 }

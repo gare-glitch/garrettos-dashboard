@@ -1,4 +1,9 @@
 import { Card } from '@/components/Card';
+import { DataRow } from '@/components/DataRow';
+import { PageHeader } from '@/components/PageHeader';
+import { DashboardGrid } from '@/components/layout-grid';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type IntegrationStatus = 'connected' | 'mocked' | 'missing env' | 'error';
 
@@ -46,49 +51,67 @@ function getStatus(integration: Integration): IntegrationStatus {
   return 'connected';
 }
 
-function statusTone(status: IntegrationStatus) {
-  if (status === 'connected') return 'good';
-  if (status === 'mocked') return 'info';
-  if (status === 'missing env') return 'warn';
-  return 'bad';
+function statusVariant(status: IntegrationStatus): 'success' | 'default' | 'warning' | 'destructive' {
+  if (status === 'connected') return 'success';
+  if (status === 'mocked') return 'default';
+  if (status === 'missing env') return 'warning';
+  return 'destructive';
 }
 
 export default function SettingsPage() {
-  return <div className="page-stack">
-    <div>
-      <p className="eyebrow">Settings</p>
-      <h1>Integration Status Center</h1>
-      <p className="muted">Control center for what is connected, what is mocked, and what needs setup next.</p>
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Settings"
+        title="Integration Status Center"
+        description="Control center for what is connected, what is mocked, and what needs setup next."
+      />
+
+      <DashboardGrid>
+        <Card title="Onboarding checklist" eyebrow="Setup" className="md:col-span-12">
+          <ul className="grid gap-2 md:grid-cols-3">
+            {checklist.map((item) => (
+              <li
+                key={item.label}
+                className={cn(
+                  'flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium',
+                  item.done ? 'text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                <span
+                  className={cn(
+                    'grid size-6 place-items-center rounded-full text-xs',
+                    item.done ? 'bg-green/15 text-green' : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {item.done ? '✓' : '•'}
+                </span>
+                {item.label}
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {integrations.map((integration) => {
+          const status = getStatus(integration);
+          return (
+            <Card title={integration.name} eyebrow="Integration" className="md:col-span-6" key={integration.name}>
+              <DataRow label="Status" value={<Badge variant={statusVariant(status)}>{status}</Badge>} />
+              <div className="space-y-2 border-t border-border py-3">
+                <small className="text-xs text-muted-foreground">Required env vars</small>
+                <code className="block rounded-xl border border-border bg-input/70 p-3 text-xs text-cyan">
+                  {integration.env.join(', ')}
+                </code>
+              </div>
+              <div className="space-y-2 border-t border-border py-3">
+                <small className="text-xs text-muted-foreground">Next setup step</small>
+                <p className="text-sm text-muted-foreground">{integration.nextStep}</p>
+              </div>
+              <DataRow label="Last checked" value="Not checked yet" />
+            </Card>
+          );
+        })}
+      </DashboardGrid>
     </div>
-
-    <section className="dashboard-grid">
-      <Card title="Onboarding checklist" eyebrow="Setup" className="span-12">
-        <ul className="checklist">
-          {checklist.map((item) => <li key={item.label} className={item.done ? 'done' : 'pending'}><span>{item.done ? '✓' : '•'}</span>{item.label}</li>)}
-        </ul>
-      </Card>
-
-      {integrations.map((integration) => {
-        const status = getStatus(integration);
-        return <Card title={integration.name} eyebrow="Integration" className="span-6" key={integration.name}>
-          <div className="integration-status-row">
-            <span>Status</span>
-            <b className={statusTone(status)}>{status}</b>
-          </div>
-          <div className="integration-block">
-            <small>Required env vars</small>
-            <code>{integration.env.join(', ')}</code>
-          </div>
-          <div className="integration-block">
-            <small>Next setup step</small>
-            <p>{integration.nextStep}</p>
-          </div>
-          <div className="integration-status-row">
-            <span>Last checked</span>
-            <b>Not checked yet</b>
-          </div>
-        </Card>;
-      })}
-    </section>
-  </div>;
+  );
 }
