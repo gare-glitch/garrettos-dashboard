@@ -124,5 +124,79 @@ export const osGarminSummary = {
   sleep: 90,
   hrv: 62,
   recovery: 89,
+  stress: 22,
   trend: [71, 76, 88, 76, 91, 84, 89],
+};
+
+export const osWeather = {
+  day: 'Monday',
+  date: 'Oct 24, 2024',
+  temp: 18,
+  unit: '°C',
+  condition: 'cloud' as const,
+};
+
+export const osWaterSummary = {
+  intake: 62,
+  goal: 120,
+  unit: 'oz',
+  supplementsDue: 2,
+};
+
+export const osAgenda = [
+  { id: 'a1', time: '09:00', title: 'LLM Architecture Review', location: 'Engineering Suite A', accent: 'primary' as const },
+  { id: 'a2', time: '11:30', title: 'Revenue Sync', location: 'Stripe Dashboard', accent: 'idle' as const },
+  { id: 'a3', time: '14:00', title: 'Agent Deployment', location: 'Vercel Edge', accent: 'secondary' as const },
+];
+
+export const osPinnedProjects = [
+  { id: 'pp1', name: 'GarrettOS Command Center', progress: 72, tag: 'Active' },
+  { id: 'pp2', name: 'Content Engine v2', progress: 45, tag: 'Queued' },
+  { id: 'pp3', name: 'OpenClaw VPS Bridge', progress: 88, tag: 'Review' },
+];
+
+export const osCurrentProject = {
+  name: 'Aether v2',
+  phase: 'Alpha Testing',
+  progress: 68,
+};
+
+export const osActiveNotes = [
+  { id: 'n1', name: 'Neural Routing v3.md' },
+  { id: 'n2', name: 'API Keys_Vault.enc' },
+  { id: 'n3', name: 'Garmin recovery protocol.md' },
+];
+
+export const osAssistantMessages = [
+  {
+    id: 'm1',
+    role: 'assistant' as const,
+    content:
+      "Good morning, Garrett. I've finished the market analysis for Project Aether. Revenue projections are up 12% following the model optimization. Would you like to review the research notes?",
+    time: 'Just now',
+  },
+  {
+    id: 'm2',
+    role: 'user' as const,
+    content: "Yes, let's look at the current active notes. Update the routing stats for the O1 model while you're at it.",
+    time: 'Sent',
+  },
+];
+
+export const osAgentSwarm = [
+  { id: 'sw1', name: 'MarketScanner', status: 'idle' as const },
+  { id: 'sw2', name: 'LeadGen_Pro', status: 'active' as const },
+  { id: 'sw3', name: 'RepoSync_Bot', status: 'wait' as const },
+];
+
+export const osSystemHealth = [
+  { label: 'VPS (Frankfurt)', value: '12ms', tone: 'good' as StatusTone },
+  { label: 'Model Routing', value: 'GPT-4o (94%)', tone: 'good' as StatusTone },
+  { label: 'API Token Usage', value: '88%', tone: 'warn' as StatusTone },
+];
+
+export const osWorkspaceStatus = {
+  mode: 'Agent Active' as const,
+  summary: '3 agents running · 248 memory chunks · VPS healthy',
+  generating: true,
 };

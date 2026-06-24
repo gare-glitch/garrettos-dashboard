@@ -6,13 +6,16 @@ import { cn } from '@/lib/utils';
 import { spacing } from '@/lib/design-system';
 import { slideUp } from '@/lib/motion';
 import { CommandDock } from './CommandDock';
-import { CommandPalette, useCommandPalette } from './CommandPalette';
+import {
+  CommandPalette,
+  CommandPaletteProvider,
+  useCommandPaletteContext,
+} from './CommandPalette';
 import { SideNavBar, SideNavDrawer } from './SideNavBar';
-import { StatusChip } from './StatusChip';
 import { TopAppBar } from './TopAppBar';
 
-export function Shell({ children }: { children: React.ReactNode }) {
-  const { open, openPalette, closePalette, togglePalette } = useCommandPalette();
+function ShellInner({ children }: { children: React.ReactNode }) {
+  const { open, openPalette, closePalette, togglePalette } = useCommandPaletteContext();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const reduceMotion = useReducedMotion();
   const authBypassEnabled = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
@@ -54,7 +57,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <motion.div
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-body-sm text-primary"
+              className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-body-sm text-primary"
               role="status"
             >
               Auth bypass enabled — private mode not fully secured.
@@ -68,5 +71,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <CommandDock onCommandOpen={openPalette} />
       <CommandPalette open={open} onClose={closePalette} />
     </div>
+  );
+}
+
+export function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <CommandPaletteProvider>
+      <ShellInner>{children}</ShellInner>
+    </CommandPaletteProvider>
   );
 }

@@ -11,6 +11,8 @@ import { scaleIn, springs } from '@/lib/motion';
 import { GarrettIcon } from './GarrettIcon';
 import { GlassPanel } from './GlassPanel';
 
+export { CommandPaletteProvider, useCommandPaletteContext, useCommandPalette } from './CommandPaletteContext';
+
 type PaletteItem = {
   id: string;
   label: string;
@@ -18,14 +20,6 @@ type PaletteItem = {
   group: string;
   icon?: string;
 };
-
-export function useCommandPalette() {
-  const [open, setOpen] = useState(false);
-  const openPalette = useCallback(() => setOpen(true), []);
-  const closePalette = useCallback(() => setOpen(false), []);
-  const togglePalette = useCallback(() => setOpen((v) => !v), []);
-  return { open, setOpen, openPalette, closePalette, togglePalette };
-}
 
 export function CommandPalette({
   open,
