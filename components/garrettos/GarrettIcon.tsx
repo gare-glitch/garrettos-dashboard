@@ -59,6 +59,13 @@ export type MaterialSymbol =
   | 'sync_alt'
   | 'payments'
   | 'more_horiz'
+  | 'warning'
+  | 'photo_camera'
+  | 'gpp_maybe'
+  | 'rocket_launch'
+  | 'fitness_center'
+  | 'water_drop'
+  | 'menu'
   | (string & {});
 
 export function GarrettIcon({
