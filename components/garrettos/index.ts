@@ -27,6 +27,7 @@ export { Skeleton, MetricSkeleton, TableSkeleton, CardSkeleton } from './Skeleto
 export { ScrollReveal, StaggerReveal, StaggerItem } from './ScrollReveal';
 export { ThinkingLoader, CodeLineLoader } from './ThinkingLoader';
 export { AssistantPanel } from './AssistantPanel';
+export type { AssistantMessage } from './AssistantPanel';
 export { HomeHero } from './HomeHero';
 export { SettingsShell } from './SettingsShell';
 export { ApiKeyCard, ApiKeyGroup, SecurityAlert } from './ApiKeyCard';

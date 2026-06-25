@@ -70,6 +70,7 @@ export type MaterialSymbol =
   | 'storage'
   | 'table_rows'
   | 'terminal'
+  | 'route'
   | (string & {});
 
 export function GarrettIcon({

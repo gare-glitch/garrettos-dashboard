@@ -8,23 +8,46 @@ import { GarrettIcon } from './GarrettIcon';
 import { GlassPanel } from './GlassPanel';
 import { CodeLineLoader, ThinkingLoader } from './ThinkingLoader';
 
+export type AssistantMessage = {
+  id: string;
+  role: 'assistant' | 'user';
+  content: string;
+  time: string;
+};
+
 export function AssistantPanel({
   messages = osAssistantMessages,
   generating = false,
+  onSend,
+  title = 'Assistant.v4',
+  subtitle,
   className,
 }: {
-  messages?: typeof osAssistantMessages;
+  messages?: AssistantMessage[];
   generating?: boolean;
+  onSend?: (text: string) => void;
+  title?: string;
+  subtitle?: string;
   className?: string;
 }) {
   const [draft, setDraft] = useState('');
+
+  function handleSend() {
+    const text = draft.trim();
+    if (!text) return;
+    onSend?.(text);
+    setDraft('');
+  }
 
   return (
     <GlassPanel variant="card" className={cn('flex min-h-[420px] flex-col overflow-hidden', className)}>
       <div className="flex items-center justify-between border-b border-white/5 bg-surface-container/20 px-4 py-3">
         <div className="flex items-center gap-2">
           <GarrettIcon name="auto_awesome" size={18} className="text-primary" />
-          <span className={cn(typography.bodyLg, 'font-semibold')}>Assistant.v4</span>
+          <div>
+            <span className={cn(typography.bodyLg, 'font-semibold')}>{title}</span>
+            {subtitle ? <p className="text-[10px] text-outline">{subtitle}</p> : null}
+          </div>
         </div>
         {generating ? <ThinkingLoader label="Thinking" /> : null}
       </div>
@@ -78,6 +101,12 @@ export function AssistantPanel({
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             placeholder="Instruct Assistant…"
             rows={2}
             className={cn(
@@ -89,6 +118,7 @@ export function AssistantPanel({
           />
           <button
             type="button"
+            onClick={handleSend}
             className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-lg bg-primary text-on-primary transition-transform hover:scale-105 active:scale-95"
             aria-label="Send message"
           >
