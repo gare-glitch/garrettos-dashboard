@@ -1,115 +1,276 @@
-import { GlassPanel, SectionHeader, SectionHeaderCompact, StatusChip } from '@/components/garrettos';
-import { spacing } from '@/lib/design-system';
+'use client';
+
+import { useState } from 'react';
+import {
+  ApiKeyCard,
+  ApiKeyGroup,
+  SecurityAlert,
+} from '@/components/garrettos/ApiKeyCard';
+import {
+  GlassPanel,
+  SectionHeader,
+  SectionHeaderCompact,
+  SettingsShell,
+  StaggerItem,
+  StaggerReveal,
+  StatusChip,
+} from '@/components/garrettos';
+import { GarrettIcon } from '@/components/garrettos/GarrettIcon';
+import { ScrollReveal } from '@/components/garrettos/ScrollReveal';
+import { typography } from '@/lib/design-system';
 import { cn } from '@/lib/utils';
+import {
+  getIntegrationStatus,
+  integrationGroups,
+  settingsChecklist,
+  settingsNavItems,
+  settingsSecurityAlert,
+} from '@/data/integrations-mock';
 
-type IntegrationStatus = 'connected' | 'mocked' | 'missing env' | 'error';
-
-type Integration = {
-  name: string;
-  env: string[];
-  nextStep: string;
-  mocked?: boolean;
-  error?: boolean;
+const sectionTitles: Record<string, string> = {
+  general: 'General',
+  security: 'Security',
+  'api-keys': 'API Keys',
+  integrations: 'Integrations',
+  appearance: 'Appearance',
 };
 
-const integrations: Integration[] = [
-  { name: 'Supabase', env: ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'], nextStep: 'Add the Supabase project URL and anon key in Vercel, then verify auth redirects.' },
-  { name: 'Garmin', env: ['GARMIN_USERNAME', 'GARMIN_PASSWORD'], nextStep: 'Connect Garmin credentials or keep imports pending until the secure importer is enabled.', mocked: true },
-  { name: 'Obsidian/OpenClawMemory', env: ['OBSIDIAN_VAULT_PATH', 'OPENCLAW_MEMORY_API_URL'], nextStep: 'Point the sync job at the Obsidian vault or OpenClawMemory API endpoint.', mocked: true },
-  { name: 'OpenClaw VPS bridge', env: ['OPENCLAW_VPS_BRIDGE_URL', 'OPENCLAW_VPS_BRIDGE_TOKEN'], nextStep: 'Deploy the bridge on the VPS and store its URL plus token in the dashboard environment.', mocked: true },
-  { name: 'GitHub/Codex', env: ['GITHUB_TOKEN', 'CODEX_WEBHOOK_SECRET'], nextStep: 'Create a scoped GitHub token and webhook secret for Codex automation events.', mocked: true },
-  { name: 'Ollama', env: ['OLLAMA_BASE_URL'], nextStep: 'Expose the Ollama base URL through the VPS bridge or private network.', mocked: true },
-  { name: 'LiteLLM', env: ['LITELLM_BASE_URL', 'LITELLM_API_KEY'], nextStep: 'Add the LiteLLM gateway URL and API key once the router is deployed.', mocked: true },
-  { name: 'Qdrant', env: ['QDRANT_URL', 'QDRANT_API_KEY'], nextStep: 'Provision Qdrant and add the collection endpoint plus API key.', mocked: true },
-  { name: 'Valkey', env: ['VALKEY_URL'], nextStep: 'Provision Valkey for queues/cache and add its connection URL.', mocked: true },
-  { name: 'Vercel', env: ['VERCEL_URL'], nextStep: 'Deploy the project on Vercel and confirm production environment variables.', mocked: true },
-];
-
-const checklist = [
-  { label: 'Vercel deployed', done: Boolean(process.env.VERCEL_URL) },
-  { label: 'Supabase env vars added', done: hasAllEnv(['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY']) },
-  { label: 'Auth bypass enabled', done: process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true' },
-  { label: 'Supabase redirect URLs configured', done: false },
-  { label: 'Database migration pending/done', done: false },
-  { label: 'Garmin import pending', done: false },
-  { label: 'OpenClaw bridge pending', done: false },
-  { label: 'Obsidian sync pending', done: false },
-  { label: 'VPS metrics pending', done: false },
-];
-
-function hasAllEnv(env: string[]) {
-  return env.every((key) => Boolean(process.env[key]));
-}
-
-function getStatus(integration: Integration): IntegrationStatus {
-  if (integration.error) return 'error';
-  if (!hasAllEnv(integration.env)) return 'missing env';
-  if (integration.mocked) return 'mocked';
-  return 'connected';
-}
-
-function statusTone(status: IntegrationStatus): 'good' | 'warn' | 'info' | 'bad' | 'idle' {
-  if (status === 'connected') return 'good';
-  if (status === 'mocked') return 'info';
-  if (status === 'missing env') return 'warn';
-  return 'bad';
-}
-
 export default function SettingsPage() {
+  const [active, setActive] = useState('integrations');
+
   return (
-    <div className={spacing.page}>
+    <div className="space-y-6">
       <SectionHeader
-        eyebrow="Settings"
+        eyebrow="System"
         title="Integration Status Center"
         description="Control center for what is connected, what is mocked, and what needs setup next."
+        action={
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-body-sm font-semibold text-on-primary transition-transform hover:scale-[1.02] active:scale-95"
+          >
+            <GarrettIcon name="add" size={18} />
+            Create new key
+          </button>
+        }
       />
 
-      <GlassPanel className="p-4">
-        <SectionHeaderCompact title="Onboarding checklist" meta={<StatusChip label={`${checklist.filter((c) => c.done).length}/${checklist.length}`} tone="info" />} />
-        <ul className="mt-3 grid gap-2 md:grid-cols-3">
-          {checklist.map((item) => (
-            <li
-              key={item.label}
-              className={cn(
-                'flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium',
-                item.done ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              <span className={cn('grid size-5 place-items-center rounded-full text-[10px]', item.done ? 'bg-green/15 text-green' : 'bg-muted text-muted-foreground')}>
-                {item.done ? '✓' : '•'}
-              </span>
-              {item.label}
-            </li>
+      <SettingsShell navItems={settingsNavItems} activeId={active} onChange={setActive}>
+        <div className="space-y-6">
+          <ScrollReveal>
+            <div className="flex items-baseline justify-between">
+              <h2 className={typography.headline}>{sectionTitles[active] ?? 'Settings'}</h2>
+            </div>
+          </ScrollReveal>
+
+          {active === 'general' ? <GeneralSection /> : null}
+          {active === 'security' ? <SecuritySection /> : null}
+          {active === 'api-keys' ? <ApiKeysSection /> : null}
+          {active === 'integrations' ? <IntegrationsSection /> : null}
+          {active === 'appearance' ? <AppearanceSection /> : null}
+        </div>
+      </SettingsShell>
+    </div>
+  );
+}
+
+function GeneralSection() {
+  return (
+    <ScrollReveal>
+      <GlassPanel variant="card" className="p-4 md:p-5">
+        <SectionHeaderCompact
+          title="Onboarding checklist"
+          meta={
+            <StatusChip
+              label={`${settingsChecklist.filter((c) => c.done).length}/${settingsChecklist.length}`}
+              tone="info"
+              size="inline"
+            />
+          }
+        />
+        <StaggerReveal className="mt-3 grid gap-2 md:grid-cols-2">
+          {settingsChecklist.map((item) => (
+            <StaggerItem key={item.label}>
+              <div
+                className={cn(
+                  'flex items-center gap-3 rounded-xl border border-white/5 px-3 py-2.5 text-body-sm',
+                  item.done ? 'text-on-surface' : 'text-on-surface-variant',
+                )}
+              >
+                <span
+                  className={cn(
+                    'grid size-5 shrink-0 place-items-center rounded-full',
+                    item.done ? 'bg-secondary/15 text-secondary' : 'bg-white/5 text-outline',
+                  )}
+                >
+                  {item.done ? <GarrettIcon name="check" size={12} /> : <GarrettIcon name="more_horiz" size={12} />}
+                </span>
+                {item.label}
+              </div>
+            </StaggerItem>
           ))}
+        </StaggerReveal>
+      </GlassPanel>
+    </ScrollReveal>
+  );
+}
+
+function SecuritySection() {
+  return (
+    <div className="space-y-4">
+      <ScrollReveal>
+        <SecurityAlert
+          title={settingsSecurityAlert.title}
+          message={settingsSecurityAlert.message}
+        />
+      </ScrollReveal>
+      <ScrollReveal delay={0.05}>
+        <GlassPanel variant="card" className="p-4 md:p-5">
+          <SectionHeaderCompact title="Authentication" />
+          <ul className="mt-3 space-y-3 text-body-sm">
+            <li className="flex items-center justify-between">
+              <span className="text-on-surface-variant">Supabase magic link</span>
+              <StatusChip label="Enabled" tone="good" showPip size="inline" />
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-on-surface-variant">Auth bypass (dev)</span>
+              <StatusChip
+                label={process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true' ? 'On' : 'Off'}
+                tone={process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true' ? 'warn' : 'idle'}
+                size="inline"
+              />
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-on-surface-variant">Redirect URLs configured</span>
+              <StatusChip label="Pending" tone="warn" size="inline" />
+            </li>
+          </ul>
+        </GlassPanel>
+      </ScrollReveal>
+    </div>
+  );
+}
+
+function ApiKeysSection() {
+  return (
+    <div className="space-y-8">
+      {integrationGroups.map((group) => (
+        <ApiKeyGroup
+          key={group.id}
+          title={group.title}
+          icon={group.icon}
+          items={group.integrations.map((integration) => {
+            const { status, tone } = getIntegrationStatus(integration);
+            return {
+              name: integration.name,
+              maskedKey: integration.apiKey ?? integration.env.join(', '),
+              lastUsed: integration.lastUsed,
+              status,
+              tone,
+              env: integration.env,
+              nextStep: integration.nextStep,
+            };
+          })}
+        />
+      ))}
+    </div>
+  );
+}
+
+function IntegrationsSection() {
+  return (
+    <div className="space-y-6">
+      <ScrollReveal>
+        <GlassPanel variant="card" className="p-4 md:p-5">
+          <SectionHeaderCompact
+            title="Onboarding checklist"
+            meta={
+              <StatusChip
+                label={`${settingsChecklist.filter((c) => c.done).length}/${settingsChecklist.length}`}
+                tone="info"
+                size="inline"
+              />
+            }
+          />
+          <StaggerReveal className="mt-3 grid gap-2 md:grid-cols-2">
+            {settingsChecklist.map((item) => (
+              <StaggerItem key={item.label}>
+                <div
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl border border-white/5 px-3 py-2.5 text-body-sm',
+                    item.done ? 'text-on-surface' : 'text-on-surface-variant',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'grid size-5 shrink-0 place-items-center rounded-full',
+                      item.done ? 'bg-secondary/15 text-secondary' : 'bg-white/5 text-outline',
+                    )}
+                  >
+                    {item.done ? <GarrettIcon name="check" size={12} /> : <GarrettIcon name="more_horiz" size={12} />}
+                  </span>
+                  {item.label}
+                </div>
+              </StaggerItem>
+            ))}
+          </StaggerReveal>
+        </GlassPanel>
+      </ScrollReveal>
+
+      {integrationGroups.map((group) => (
+        <ScrollReveal key={group.id}>
+          <div className="mb-3 flex items-center gap-3">
+            <GarrettIcon name={group.icon} size={22} className="text-primary" />
+            <h3 className={typography.headlineMd}>{group.title}</h3>
+          </div>
+          <StaggerReveal className="grid gap-gutter md:grid-cols-2">
+            {group.integrations.map((integration) => {
+              const { status, tone } = getIntegrationStatus(integration);
+              return (
+                <StaggerItem key={integration.name}>
+                  <ApiKeyCard
+                    name={integration.name}
+                    maskedKey={integration.apiKey ?? integration.env.join(', ')}
+                    lastUsed={integration.lastUsed}
+                    status={status}
+                    tone={tone}
+                    env={integration.env}
+                    nextStep={integration.nextStep}
+                  />
+                </StaggerItem>
+              );
+            })}
+          </StaggerReveal>
+        </ScrollReveal>
+      ))}
+    </div>
+  );
+}
+
+function AppearanceSection() {
+  return (
+    <ScrollReveal>
+      <GlassPanel variant="card" className="p-4 md:p-5">
+        <SectionHeaderCompact title="Appearance" />
+        <ul className="mt-3 space-y-3 text-body-sm">
+          <li className="flex items-center justify-between">
+            <span className="text-on-surface-variant">Theme</span>
+            <span className="font-mono text-on-surface">Stitch sand (dark)</span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-on-surface-variant">Font</span>
+            <span className="font-mono text-on-surface">Geist / Geist Mono</span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-on-surface-variant">Reduced motion</span>
+            <StatusChip label="Auto" tone="info" size="inline" />
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-on-surface-variant">Glass blur</span>
+            <span className="font-mono text-on-surface">24px</span>
+          </li>
         </ul>
       </GlassPanel>
-
-      <div className="os-bento">
-        {integrations.map((integration) => {
-          const status = getStatus(integration);
-          return (
-            <GlassPanel key={integration.name} className="col-span-2 p-4 md:col-span-6">
-              <SectionHeaderCompact title={integration.name} meta={<StatusChip label={status} tone={statusTone(status)} />} />
-              <div className="mt-3 space-y-3 text-xs">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Required env vars</p>
-                  <code className="mt-1 block rounded-lg border border-border bg-input/50 p-2 font-mono text-[10px] text-cyan">
-                    {integration.env.join(', ')}
-                  </code>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Next setup step</p>
-                  <p className="mt-1 text-muted-foreground">{integration.nextStep}</p>
-                </div>
-                <div className="flex justify-between border-t border-border/60 pt-2">
-                  <span className="text-muted-foreground">Last checked</span>
-                  <span>Not checked yet</span>
-                </div>
-              </div>
-            </GlassPanel>
-          );
-        })}
-      </div>
-    </div>
+    </ScrollReveal>
   );
 }
