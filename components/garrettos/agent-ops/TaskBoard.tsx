@@ -32,14 +32,19 @@ export function TaskBoard({
   tasks,
   source,
   warning,
+  loading,
   className,
   onSelect,
+  onCreate,
 }: {
   tasks?: TaskRun[];
   source?: 'server' | 'mock' | 'stale';
   warning?: string;
+  loading?: boolean;
   className?: string;
   onSelect?: (task: TaskRun) => void;
+  /** Called after a task is created elsewhere (e.g. composer) so the board can refresh. */
+  onCreate?: () => void;
 }) {
   const list = Array.isArray(tasks) ? tasks : [];
   const grouped = STATUS_ORDER.map((status) => ({
@@ -55,12 +60,26 @@ export function TaskBoard({
             <GarrettIcon name="queue" size={18} className="text-primary" />
             <h3 className={typography.headlineMd}>Task board</h3>
           </div>
-          <SourceTag source={source} count={list.length} label="tasks" />
+          <div className="flex items-center gap-3">
+            {onCreate ? (
+              <button
+                type="button"
+                onClick={onCreate}
+                className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 label-caps text-[10px] text-primary transition-colors hover:bg-primary/15"
+              >
+                <GarrettIcon name="add_task" size={14} />
+                New
+              </button>
+            ) : null}
+            <SourceTag source={source} count={list.length} label="tasks" />
+          </div>
         </div>
 
         {warning ? <p className={cn(typography.body, 'mb-3 text-[11px] text-primary/80')}>{warning}</p> : null}
 
-        {list.length === 0 ? (
+        {loading ? (
+          <p className="py-6 text-center text-body-sm text-on-surface-variant">Loading tasks…</p>
+        ) : list.length === 0 ? (
           <p className="py-6 text-center text-body-sm text-on-surface-variant">No tasks in the queue.</p>
         ) : (
           <div className="grid grid-cols-1 gap-gutter md:grid-cols-2 xl:grid-cols-5">

@@ -39,7 +39,7 @@ export type { LogEntry, LogLevel } from './LogStream';
 export { ApprovalDialog, AgentFleetTable, AgentDrawer } from './AgentOps';
 export type { Approval, AgentFleetRow, AgentConfig } from './AgentOps';
 // Agent Operations Center components (M9)
-export { SessionMonitor, SourceTag, TaskBoard, LogConsole, BlockedRescue, AgentHealthGrid } from './agent-ops';
+export { SessionMonitor, SourceTag, TaskBoard, LogConsole, BlockedRescue, AgentHealthGrid, TaskComposer, TaskComposerProvider, useTaskComposer, type TaskComposerResult } from './agent-ops';
 // Speech interface (M9A)
 export { SpeechOrb, VoiceStatusChip, VoiceCommandButton, VoiceTranscriptPanel, VoiceCommandOverlay, VoiceProvider, useVoice } from './speech';
 // Premium reactive effects (M9A)

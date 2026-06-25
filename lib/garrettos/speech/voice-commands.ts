@@ -42,6 +42,12 @@ export const VOICE_COMMANDS: VoiceCommand[] = [
     action: 'sync-memory',
     phrases: ['sync memory', 'index memory', 'reindex', 'sync the memory'],
   },
+  {
+    id: 'new-task',
+    label: 'New Task',
+    action: 'new-task',
+    phrases: ['new task', 'create task', 'queue task', 'add a task', 'make a task'],
+  },
 ];
 
 export const VOICE_COMMAND_IDS: VoiceCommandId[] = VOICE_COMMANDS.map((c) => c.id);

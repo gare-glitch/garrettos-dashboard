@@ -21,7 +21,8 @@ export type VoiceCommandId =
   | 'launch-agent'
   | 'show-tasks'
   | 'ask-garrett'
-  | 'sync-memory';
+  | 'sync-memory'
+  | 'new-task';
 
 export type VoiceCommand = {
   id: VoiceCommandId;

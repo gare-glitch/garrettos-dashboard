@@ -22,6 +22,7 @@ import {
   LogConsole,
   SessionMonitor,
   TaskBoard,
+  useTaskComposer,
 } from '@/components/garrettos/agent-ops';
 import { GarrettIcon } from '@/components/garrettos/GarrettIcon';
 import { BreathingPip } from '@/components/garrettos/BreathingPip';
@@ -52,6 +53,7 @@ export default function OpenClawPage() {
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeAgent, setActiveAgent] = useState<AgentFleetRow | null>(null);
+  const { openComposer } = useTaskComposer();
   const [config, setConfig] = useState<AgentConfig>({
     model: 'claude-sonnet',
     systemPrompt: 'You are a careful autonomous agent operating on the GarrettOS VPS. Prefer minimal blast radius. Never deploy without approval.',
@@ -75,7 +77,7 @@ export default function OpenClawPage() {
     }),
   );
 
-  const { data: tasksData, source: tasksSource, warning: tasksWarning } = useGarrettOSData<TasksPayload>(
+  const { data: tasksData, source: tasksSource, warning: tasksWarning, refetch: refetchTasks, loading: tasksLoading } = useGarrettOSData<TasksPayload>(
     '/api/garrettos/tasks',
     () => ({ tasks: osTasks }),
   );
@@ -123,9 +125,19 @@ export default function OpenClawPage() {
       <SectionHeader
         eyebrow="OpenClaw Control"
         title="Agent Operations Center"
-        description="Live tmux sessions, task board, event stream, agent health, and blocked-task rescue. Read-only — no mutating actions yet."
+        description="Live tmux sessions, task board, event stream, agent health, and blocked-task rescue. Queue tasks safely — nothing executes yet."
         action={
-          <div className="flex items-center gap-1 rounded-full border border-white/8 bg-surface-container/40 p-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openComposer}
+              className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 label-caps text-[11px] text-primary transition-colors hover:bg-primary/15"
+              aria-label="New task"
+            >
+              <GarrettIcon name="add_task" size={16} />
+              <span className="hidden sm:inline">New Task</span>
+            </button>
+            <div className="flex items-center gap-1 rounded-full border border-white/8 bg-surface-container/40 p-1">
             <button
               type="button"
               onClick={() => setView('grid')}
@@ -148,6 +160,7 @@ export default function OpenClawPage() {
             >
               <GarrettIcon name="table_rows" size={16} />
             </button>
+            </div>
           </div>
         }
       />
@@ -239,7 +252,13 @@ export default function OpenClawPage() {
       </div>
 
       {/* Task board grouped by status */}
-      <TaskBoard tasks={tasks} source={tasksSource} warning={tasksWarning} />
+      <TaskBoard
+        tasks={tasks}
+        source={tasksSource}
+        warning={tasksWarning}
+        loading={tasksLoading}
+        onCreate={() => refetchTasks()}
+      />
 
       {/* Pending approvals + compact task queue */}
       <div className="grid grid-cols-1 gap-gutter lg:grid-cols-2">

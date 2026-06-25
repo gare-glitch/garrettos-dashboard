@@ -17,6 +17,7 @@ import {
   PaletteStaggerList,
 } from './motion';
 import { VoiceCommandButton, VoiceTranscriptPanel, useVoice } from './speech';
+import { useTaskComposer } from './agent-ops/TaskComposerContext';
 
 export { CommandPaletteProvider, useCommandPaletteContext, useCommandPalette } from './CommandPaletteContext';
 
@@ -40,6 +41,26 @@ export function CommandPalette({
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const { state, transcript, lastCommand, supported, start, stop } = useVoice();
+  const { openComposer } = useTaskComposer();
+
+  const close = useCallback(() => {
+    onClose();
+    setQuery('');
+    setActiveIndex(0);
+  }, [onClose]);
+
+  const runItem = useCallback(
+    (item: PaletteItem) => {
+      close();
+      if (item.href.startsWith('/')) router.push(item.href);
+    },
+    [close, router],
+  );
+
+  const openNewTask = useCallback(() => {
+    close();
+    openComposer();
+  }, [close, openComposer]);
 
   const items = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -73,20 +94,6 @@ export function CommandPalette({
   }, [items]);
 
   const flatItems = items;
-
-  const close = useCallback(() => {
-    onClose();
-    setQuery('');
-    setActiveIndex(0);
-  }, [onClose]);
-
-  const runItem = useCallback(
-    (item: PaletteItem) => {
-      close();
-      if (item.href.startsWith('/')) router.push(item.href);
-    },
-    [close, router],
-  );
 
   useEffect(() => {
     if (!open) return;
@@ -133,6 +140,15 @@ export function CommandPalette({
             aria-label="Search commands"
           />
           <VoiceCommandButton state={state} supported={supported} onStart={start} onStop={stop} size={18} />
+          <button
+            type="button"
+            onClick={openNewTask}
+            className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 label-caps text-[10px] text-primary transition-colors hover:bg-primary/15"
+            aria-label="New task"
+          >
+            <GarrettIcon name="add_task" size={16} />
+            <span className="hidden sm:inline">New Task</span>
+          </button>
           <kbd className="hidden rounded border border-white/10 bg-surface-container-high/50 px-1.5 py-0.5 font-mono text-[10px] text-outline sm:inline">
             esc
           </kbd>

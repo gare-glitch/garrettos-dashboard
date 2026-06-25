@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useBrowserSpeech } from '@/lib/garrettos/speech/use-browser-speech';
+import { useTaskComposer } from '../agent-ops/TaskComposerContext';
 import type { VoiceMatchResult, VoiceState } from '@/lib/garrettos/speech/types';
 
 type VoiceContextValue = {
@@ -33,6 +34,7 @@ const VoiceContext = createContext<VoiceContextValue | null>(null);
  */
 export function VoiceProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { openComposer } = useTaskComposer();
   const [overlayOpen, setOverlayOpen] = useState(false);
 
   const onCommand = useCallback(
@@ -41,10 +43,14 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
         router.push(match.command.href);
         setOverlayOpen(false);
       }
-      // action-only commands (e.g. sync-memory) stay surfaced as lastCommand;
-      // the integrator decides whether to act. No mutations here.
+      // Action-only commands: open the task composer for new-task; other
+      // actions stay surfaced as lastCommand for the integrator. No mutations.
+      if (match.command.action === 'new-task') {
+        openComposer();
+        setOverlayOpen(false);
+      }
     },
-    [router],
+    [router, openComposer],
   );
 
   const speech = useBrowserSpeech({ onCommand });

@@ -321,6 +321,12 @@ existing component, do not write a new one.
 - **`TerminalOverlay`** — terminal modal with heartbeat cursor.
 - **`AssistantPanel`** — chat interface with `onSend`, `title`, `subtitle`. The basis for
   `/mentor` and any assistant surface.
+- **`TaskComposer`** (M10) — right-sheet drawer for creating a queued task record.
+  Fields: title, description, agent (opencode/claude/openclaw/manual), priority,
+  requires-approval toggle, target repo. Submits to `POST /api/garrettos/tasks/create`.
+  **Never executes.** Shows a Live/Mock `SourceTag` + fallback warning on success.
+  Opened via the CommandPalette "New Task" button, the `/openclaw` "New Task"
+  button, or the "new task" voice command. State owned by `TaskComposerProvider`.
 
 ### Settings & forms
 - **`SettingsShell`** — sidebar nav + content. Active tab uses `layoutId`.

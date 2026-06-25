@@ -165,10 +165,18 @@ def _http_ok(url: str, timeout: float = SUBPROCESS_TIMEOUT) -> bool:
 
 @app.middleware("http")
 async def block_write_methods(request: Request, call_next):
-    """Enforce read-only: reject anything that isn't GET or HEAD."""
-    if request.method not in ("GET", "HEAD"):
-        return JSONResponse({"detail": "Method Not Allowed — bridge is read-only"}, status_code=405)
-    return await call_next(request)
+    """Enforce read-only everywhere EXCEPT the single allowed write endpoint.
+
+    POST /tasks/create is the one permitted mutation (M10): it writes a queued
+    markdown task file to the vault. Every other non-GET/HEAD request is 405.
+    The /tasks/create handler itself re-checks the token and sanitizes input.
+    """
+    if request.method in ("GET", "HEAD"):
+        return await call_next(request)
+    # Allow only POST to exactly /tasks/create; reject everything else.
+    if request.method == "POST" and request.url.path.rstrip("/") == "/tasks/create":
+        return await call_next(request)
+    return JSONResponse({"detail": "Method Not Allowed — bridge is read-only"}, status_code=405)
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +477,147 @@ def tasks(authorization: str | None = Header(default=None)):
             continue
 
     return envelope({"tasks": found})
+
+
+# ---------------------------------------------------------------------------
+# /tasks/create — the single permitted write endpoint (M10)
+# ---------------------------------------------------------------------------
+
+# Hard limits mirror the Vercel route validation; the bridge re-validates so a
+# direct caller can't bypass them.
+_CREATE_TITLE_MAX = 160
+_CREATE_DESC_MAX = 4000
+_CREATE_REPO_MAX = 240
+_CREATE_AGENTS = {"opencode", "claude", "openclaw", "manual"}
+_CREATE_PRIORITIES = {"low", "medium", "high"}
+# Reject shell metacharacters / command separators anywhere in metadata that
+# could later be interpreted by a shell if a future daemon ever reads it back.
+_SHELL_META_RE = re.compile(r"[;|&`$<>\\\n\r]")
+
+
+def _slugify_task(title: str) -> str:
+    """Reduce a free-text title to a safe filename-safe slug."""
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower().strip())
+    slug = slug.strip("-")
+    return (slug[:48] or "task")
+
+
+@app.post("/tasks/create")
+async def create_task(request: Request, authorization: str | None = Header(default=None)):
+    """Write a single queued task markdown file. Does NOT execute anything.
+
+    Safety:
+      - Token-protected (same as every data endpoint).
+      - Sanitized filename (slug only; no path traversal, no shell chars).
+      - Rejects shell metacharacters in title/description/repo metadata.
+      - Write-only: status is always `queued`; never flips an existing file.
+      - Never overwrites an existing task file (unique id = slug + timestamp).
+      - Never executes anything; no subprocess, no tmux, no shell.
+    """
+    require_token(authorization)
+
+    # Parse + validate the JSON body (small, in-memory).
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"detail": "invalid JSON body"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"detail": "body must be an object"}, status_code=400)
+
+    title = str(body.get("title", "")).strip()
+    if not title or len(title) > _CREATE_TITLE_MAX:
+        return JSONResponse({"detail": "title required (<=160 chars)"}, status_code=400)
+
+    agent = str(body.get("agent", "")).strip().lower()
+    if agent not in _CREATE_AGENTS:
+        return JSONResponse({"detail": "agent must be opencode/claude/openclaw/manual"}, status_code=400)
+
+    priority = str(body.get("priority", "medium")).strip().lower()
+    if priority not in _CREATE_PRIORITIES:
+        return JSONResponse({"detail": "priority must be low/medium/high"}, status_code=400)
+
+    requires_approval = bool(body.get("requiresApproval", False))
+
+    description = str(body.get("description", "")).strip()
+    if len(description) > _CREATE_DESC_MAX:
+        return JSONResponse({"detail": "description too long"}, status_code=400)
+
+    target_repo = str(body.get("targetRepo", "")).strip()
+    if len(target_repo) > _CREATE_REPO_MAX:
+        return JSONResponse({"detail": "targetRepo too long"}, status_code=400)
+    if target_repo and _SHELL_META_RE.search(target_repo):
+        return JSONResponse({"detail": "targetRepo contains disallowed characters"}, status_code=400)
+
+    # Reject shell metacharacters in title/description too — defense in depth
+    # so a future execution daemon can never be tricked by stored metadata.
+    if _SHELL_META_RE.search(title) or _SHELL_META_RE.search(description):
+        return JSONResponse({"detail": "metadata contains disallowed characters"}, status_code=400)
+
+    # Build a unique id (slug + UTC timestamp + short counter) so we never
+    # overwrite an existing task file.
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%d-%H%M%S")
+    slug = _slugify_task(title)
+    task_id = f"{slug}-{ts}"
+    created_at = now.isoformat()
+
+    # Find the first existing vault tasks dir; create it if missing.
+    task_dir = None
+    for d in TASK_PATHS:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            task_dir = d
+            break
+        except Exception:
+            continue
+    if task_dir is None:
+        return JSONResponse({"detail": "no writable task directory available"}, status_code=500)
+
+    file_path = task_dir / f"{task_id}.md"
+    # Never overwrite an existing file (collision is essentially impossible
+    # with the timestamp, but guard anyway).
+    if file_path.exists():
+        return JSONResponse({"detail": "task id collision — retry"}, status_code=409)
+
+    # Compose the markdown body. Frontmatter is machine-parsed by GET /tasks.
+    fm_lines = [
+        "---",
+        f"id: {task_id}",
+        f"title: {title}",
+        "status: queued",
+        f"agent: {agent}",
+        f"priority: {priority}",
+        f"requires_approval: {'true' if requires_approval else 'false'}",
+        f"created_at: {created_at}",
+    ]
+    if target_repo:
+        fm_lines.append(f"target_repo: {target_repo}")
+    fm_lines.append("---")
+    fm_lines.append("")
+    if description:
+        fm_lines.append(description)
+    else:
+        fm_lines.append(f"# {title}")
+    fm_lines.append("")
+
+    try:
+        file_path.write_text("\n".join(fm_lines), encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - filesystem error
+        return JSONResponse({"detail": f"could not write task file: {exc}"}, status_code=500)
+
+    task = {
+        "id": task_id,
+        "title": title,
+        "status": "queued",
+        "agent": agent,
+        "priority": priority,
+        "requiresApproval": requires_approval,
+        "targetRepo": target_repo or None,
+        "createdAt": created_at,
+        "updated": created_at,
+        "description": description or None,
+    }
+    return envelope({"task": task, "source": "server"})
 
 
 # ---------------------------------------------------------------------------

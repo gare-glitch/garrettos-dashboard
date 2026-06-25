@@ -15,6 +15,7 @@ import { TopAppBar } from './TopAppBar';
 import { AmbientMouseField, MotionProvider, RouteTransition } from './motion';
 import { AppleStyleDock } from './navigation/AppleStyleDock';
 import { VoiceCommandOverlay, VoiceProvider, useVoice } from './speech';
+import { TaskComposer, TaskComposerProvider, useTaskComposer } from './agent-ops';
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { open, openPalette, closePalette, togglePalette } = useCommandPaletteContext();
@@ -74,6 +75,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <AppleStyleDock onCommandOpen={openPalette} />
       <CommandPalette open={open} onClose={closePalette} />
       <VoiceOverlayBridge />
+      <TaskComposerBridge />
     </div>
   );
 }
@@ -93,13 +95,21 @@ function VoiceOverlayBridge() {
   );
 }
 
+/** Renders the TaskComposer drawer from inside the provider tree. */
+function TaskComposerBridge() {
+  const { open, closeComposer } = useTaskComposer();
+  return <TaskComposer open={open} onClose={closeComposer} />;
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <MotionProvider>
       <CommandPaletteProvider>
-        <VoiceProvider>
-          <ShellInner>{children}</ShellInner>
-        </VoiceProvider>
+        <TaskComposerProvider>
+          <VoiceProvider>
+            <ShellInner>{children}</ShellInner>
+          </VoiceProvider>
+        </TaskComposerProvider>
       </CommandPaletteProvider>
     </MotionProvider>
   );

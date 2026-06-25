@@ -21,7 +21,7 @@
 import { mockProvider } from './mock-provider';
 import type { GarrettOSDataProvider } from './providers';
 import { ok, isServerBridgeConfigured } from './providers';
-import type { ProviderResult, HealthPayload, AgentsPayload, TasksPayload, MemoryPayload, IntegrationsPayload, EventsPayload, ModelsPayload, LogsPayload } from './types';
+import type { ProviderResult, HealthPayload, AgentsPayload, TasksPayload, MemoryPayload, IntegrationsPayload, EventsPayload, ModelsPayload, LogsPayload, TaskCreateInput, TaskCreateResult } from './types';
 
 /** Fetch helper with a short timeout so a slow upstream can't hang a request. */
 async function safeFetch(url: string, token?: string, timeoutMs = 2500): Promise<Response | null> {
@@ -36,6 +36,29 @@ async function safeFetch(url: string, token?: string, timeoutMs = 2500): Promise
     });
     clearTimeout(t);
     if (!res.ok) return null;
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+/** POST helper with a short timeout for the single allowed bridge write (M10).
+ *  Only ever used for /tasks/create, which writes a queued markdown file. */
+async function safePost(url: string, body: unknown, token?: string, timeoutMs = 3000): Promise<Response | null> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(t);
     return res;
   } catch {
     return null;
@@ -267,6 +290,34 @@ export const serverProvider: GarrettOSDataProvider = {
       () => mockProvider.getLogs(scope),
       'VPS bridge logs unreachable — showing mock logs',
     );
+  },
+
+  async createTask(input: TaskCreateInput): Promise<ProviderResult<TaskCreateResult>> {
+    const bridgeUrl = process.env.OPENCLAW_VPS_BRIDGE_URL;
+    const bridgeToken = process.env.OPENCLAW_VPS_BRIDGE_TOKEN;
+    // No bridge configured → record locally as mock.
+    if (!bridgeUrl) {
+      const mock = await mockProvider.createTask(input);
+      return ok<TaskCreateResult>(mock.data, 'mock', 'VPS bridge URL not configured — task recorded locally (mock)');
+    }
+    // Bridge configured → attempt the durable write, fall back to mock on any failure.
+    try {
+      const res = await safePost(`${bridgeUrl}/tasks/create`, input, bridgeToken);
+      if (!res || !res.ok) {
+        const mock = await mockProvider.createTask(input);
+        return ok<TaskCreateResult>(mock.data, 'mock', 'VPS bridge task write failed — task recorded locally (mock)');
+      }
+      const json = await res.json();
+      const payload = unwrapBridge<TaskCreateResult>(json);
+      if (!payload || !payload?.task) {
+        const mock = await mockProvider.createTask(input);
+        return ok<TaskCreateResult>(mock.data, 'mock', 'VPS bridge returned no task — task recorded locally (mock)');
+      }
+      return ok<TaskCreateResult>(payload, 'server');
+    } catch {
+      const mock = await mockProvider.createTask(input);
+      return ok<TaskCreateResult>(mock.data, 'mock', 'VPS bridge task write errored — task recorded locally (mock)');
+    }
   },
 };
 

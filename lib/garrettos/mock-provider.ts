@@ -26,8 +26,8 @@ import {
   integrationGroups,
   getIntegrationStatus,
 } from '@/data/integrations-mock';
-import type { GarrettOSDataProvider } from './providers';
 import { ok } from './providers';
+import type { GarrettOSDataProvider } from './providers';
 import type {
   HealthPayload,
   AgentsPayload,
@@ -37,11 +37,29 @@ import type {
   EventsPayload,
   ModelsPayload,
   LogsPayload,
+  TaskCreateInput,
+  TaskCreateResult,
   AgentSession,
   SystemHealth,
   MemoryEvent,
   IntegrationStatus,
+  TaskRun,
 } from './types';
+
+/**
+ * In-memory store of tasks created via the mock provider (M10). These are
+ * prepended to the seeded mock tasks so the queue reflects newly-created
+ * work within a serverless request lifetime. The bridge is the durable
+ * store when server mode is on; this is the mock fallback.
+ */
+const createdMockTasks: TaskRun[] = [];
+
+let mockTaskSeq = 0;
+
+function nextMockTaskId(): string {
+  mockTaskSeq += 1;
+  return `mock-task-${Date.now().toString(36)}-${mockTaskSeq}`;
+}
 
 export const mockProvider: GarrettOSDataProvider = {
   async getHealth() {
@@ -72,7 +90,10 @@ export const mockProvider: GarrettOSDataProvider = {
   },
 
   async getTasks() {
-    return ok<TasksPayload>({ tasks: osTasks }, 'mock');
+    // Merge session-created mock tasks in front of the seeded mock tasks so
+    // the queue reflects newly-created work (M10).
+    const tasks: TaskRun[] = [...createdMockTasks, ...osTasks];
+    return ok<TasksPayload>({ tasks }, 'mock');
   },
 
   async getMemory() {
@@ -145,4 +166,38 @@ export const mockProvider: GarrettOSDataProvider = {
     const filtered = scope === 'all' ? lines : lines.filter((l) => l.source === scope || (scope === 'bridge' && l.source !== 'litellm'));
     return ok<LogsPayload>({ scope, lines: filtered.length ? filtered : lines }, 'mock');
   },
+
+  async createTask(input: TaskCreateInput) {
+    // Sanitize the title into a safe id slug (no shell metacharacters).
+    const slug = sanitizeTaskSlug(input.title);
+    const id = `${slug}-${nextMockTaskId()}`;
+    const now = new Date().toISOString();
+    const task: TaskRun = {
+      id,
+      title: input.title.trim(),
+      status: 'queued',
+      agent: input.agent,
+      priority: input.priority,
+      description: input.description?.trim() || undefined,
+      requiresApproval: input.requiresApproval,
+      targetRepo: input.targetRepo?.trim() || undefined,
+      createdAt: now,
+      updated: now,
+    };
+    createdMockTasks.unshift(task);
+    const result: TaskCreateResult = { task, source: 'mock' };
+    return ok<TaskCreateResult>(result, 'mock');
+  },
 };
+
+/** Reduce a free-text title to a safe filename-safe slug (used by mock + bridge). */
+export function sanitizeTaskSlug(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'task'
+  );
+}

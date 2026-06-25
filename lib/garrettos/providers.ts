@@ -21,6 +21,8 @@ import type {
   EventsPayload,
   ModelsPayload,
   LogsPayload,
+  TaskCreateInput,
+  TaskCreateResult,
 } from './types';
 
 export type GarrettOSDataProvider = {
@@ -32,6 +34,11 @@ export type GarrettOSDataProvider = {
   getEvents(): Promise<ProviderResult<EventsPayload>>;
   getModels(): Promise<ProviderResult<ModelsPayload>>;
   getLogs(scope?: 'litellm' | 'bridge' | 'tmux' | 'all'): Promise<ProviderResult<LogsPayload>>;
+  /**
+   * Create a queued task record (M10). Does NOT execute anything. Writes to
+   * the bridge when in server mode, otherwise records locally as mock.
+   */
+  createTask(input: TaskCreateInput): Promise<ProviderResult<TaskCreateResult>>;
 };
 
 export type DataMode = 'mock' | 'server';

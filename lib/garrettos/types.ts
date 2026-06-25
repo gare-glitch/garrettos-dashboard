@@ -83,7 +83,38 @@ export type TaskRun = OsTask & {
   logPath?: string;
   /** Suggested next action for a blocked task (bridge frontmatter). */
   nextAction?: string;
+  /** Free-text description/body of the task (M10 composer). */
+  description?: string;
+  /** Whether the task requires human approval before execution (M10). */
+  requiresApproval?: boolean;
+  /** Target repo/project path the task operates on (M10). */
+  targetRepo?: string;
+  /** ISO timestamp the task was created (M10). */
+  createdAt?: string;
 };
+
+/** Allowed agents for task creation. */
+export type TaskAgent = 'opencode' | 'claude' | 'openclaw' | 'manual';
+
+/** Input shape for creating a queued task record (M10). No execution. */
+export type TaskCreateInput = {
+  title: string;
+  description?: string;
+  agent: TaskAgent;
+  priority: 'low' | 'medium' | 'high';
+  requiresApproval: boolean;
+  targetRepo?: string;
+};
+
+/** Result of creating a task — the persisted TaskRun plus its source. */
+export type TaskCreateResult = {
+  task: TaskRun;
+  /** Where the record was written: 'server' (bridge) or 'mock' (local). */
+  source: 'server' | 'mock';
+};
+
+/** Payload envelope for the create-task route. */
+export type TaskCreatePayload = TaskCreateResult;
 
 /** A tmux session surfaced by the bridge. */
 export type TmuxSession = {

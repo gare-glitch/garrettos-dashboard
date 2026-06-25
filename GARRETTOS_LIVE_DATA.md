@@ -132,6 +132,7 @@ Mock fallback is **universal and automatic**. No panel ever goes blank.
 | OpenClaw agent health grid | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/health.agent_health`) | idle/unknown per service |
 | OpenClaw event/log stream (filtered) | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/events` with `scope`) | `osEvents` |
 | Scoped logs (`/api/garrettos/logs`) | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/logs?scope=`) | synthetic mock lines |
+| Task creation (`/api/garrettos/tasks/create`) | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`POST /tasks/create`) | in-memory mock record |
 | Memory neural index / stats | `server` + `OBSIDIAN_MEMORY_API_URL` | `osNeuralIndex`, `osMemoryStats` |
 | Settings live-data readiness | derived from env presence | `liveDataEnvs` |
 | System containers / logs / terminal / topology | (not yet provider-backed) | mock |
@@ -259,4 +260,99 @@ data the ops center needs, without compromising the read-only contract:
 - No mutating actions (no approve/deny/restart/deploy buttons do anything).
 - No secrets exposed (bridge scrubs all output; tokens are server-only).
 - Build stays green; mock fallback is universal.
+
+## 9. Task queue creation workflow (M10)
+
+M10 adds the first safe write to the system: creating a **queued** task record.
+Nothing executes. The workflow is record-only by design.
+
+### Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/garrettos/tasks` | GET | Read the task queue (M7, unchanged) |
+| `/api/garrettos/tasks/create` | POST | Create a queued task record only |
+
+`POST /api/garrettos/tasks/create` validates the body (allowed agents
+`opencode`/`claude`/`openclaw`/`manual`, allowed priorities `low`/`medium`/
+`high`, length limits, shell-metacharacter rejection in `targetRepo`) and calls
+`provider.createTask`. Unknown fields, oversized values, or shell
+metacharacters return **400** (not 500). On any provider failure it falls back
+to recording the task locally as mock and returns HTTP 200 with a warning.
+
+### Provider behavior
+
+- **Server mode:** `serverProvider.createTask` POSTs to the bridge
+  `${OPENCLAW_VPS_BRIDGE_URL}/tasks/create` with the bearer token. On any
+  failure (network, auth, timeout, non-OK, missing payload) it falls back to
+  `mockProvider.createTask` and stamps `source: 'mock'` + a warning.
+- **Mock mode / no bridge:** `mockProvider.createTask` records the task in an
+  in-memory list (`createdMockTasks`) prepended to the seeded mock tasks, so
+  `getTasks` reflects newly-created work within the request lifetime. The id is
+  a sanitized slug + timestamp.
+
+### Task markdown format (bridge writer)
+
+The bridge `POST /tasks/create` writes a single markdown file to the first
+existing vault tasks dir (`/root/vault/OpenClawMemory/tasks/` by default):
+
+```markdown
+---
+id: parse-garmin-export-20260624-221901
+title: Parse Garmin export
+status: queued
+agent: opencode
+priority: high
+requires_approval: true
+created_at: 2026-06-24T22:19:01Z
+target_repo: garrettos-dashboard
+---
+
+Body text / description.
+```
+
+`GET /tasks` parses this frontmatter back into `TaskRun` rows (M9 already reads
+`updated`/`log_path`/`next_action`; M10 adds `requiresApproval`/`targetRepo`/
+`createdAt`/`description`).
+
+### Safety limits (bridge writer)
+
+- **Read-only everywhere except this one endpoint.** The bridge middleware
+  allows only `POST /tasks/create`; every other non-GET/HEAD is still 405.
+- **Token-protected** (same bearer token as every data endpoint).
+- **Sanitized filename:** the id slug is `[a-z0-9-]` only, capped at 48 chars,
+  suffixed with a UTC timestamp so it is unique.
+- **No shell metacharacters** in title/description/targetRepo (rejected with
+  400). Defense in depth so a future execution daemon can never be tricked by
+  stored metadata.
+- **Write-only queued files:** `status` is always `queued`. The writer never
+  flips an existing file's status.
+- **Never overwrites:** a unique id (slug + timestamp) guarantees no collision;
+  a collision returns 409 rather than overwriting.
+- **No execution:** no subprocess, no tmux, no shell. The handler only writes a
+  file to disk.
+
+### Dashboard behavior
+
+- The TaskComposer drawer (opened from the CommandPalette "New Task" button,
+  the `/openclaw` "New Task" button, or the "new task" voice command) submits
+  to `POST /api/garrettos/tasks/create`.
+- On success, the composer shows the created task + a `SourceTag`
+  (Live/Mock) + any fallback warning.
+- The `/openclaw` TaskBoard refetches `/api/garrettos/tasks` after a creation
+  so the new task appears immediately, grouped under `queued`.
+- Empty/loading/error states: the TaskBoard renders "Loading tasks…", "No
+  tasks in the queue.", or the fallback warning respectively.
+
+### Future execution daemon design (NOT built yet)
+
+A later phase may add an execution daemon that watches the tasks dir and picks
+up `queued` tasks whose `requires_approval` flag has been satisfied. Until
+then, created tasks are inert records. The daemon must:
+- read task files only after a human flips `requires_approval: true` →
+  `approved: true` (out of scope for M10),
+- never execute from an HTTP request,
+- keep the bridge read-only for everything except `/tasks/create`,
+- log execution to the task's `log_path` so the ops center can tail it.
+
 
