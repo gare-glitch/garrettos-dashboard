@@ -195,8 +195,9 @@ def health(authorization: str | None = Header(default=None)):
         except Exception:
             pass
 
-    # Memory
-    mem_used = mem_total = 0.0
+    # Memory — /proc/meminfo values are in KB. Convert to GB for display fields
+    # labeled "GB", and keep the *_mb fields in MB (as their names promise).
+    mem_used_mb = mem_total = 0.0
     meminfo = safe_run(["cat", "/proc/meminfo"])
     if meminfo:
         info = {}
@@ -208,7 +209,10 @@ def health(authorization: str | None = Header(default=None)):
                 info[key] = int(val) / 1024.0  # KB → MB
         mem_total = info.get("MemTotal", 0.0)
         mem_avail = info.get("MemAvailable", mem_total)
-        mem_used = max(0.0, mem_total - mem_avail)
+        mem_used_mb = max(0.0, mem_total - mem_avail)
+    # GB equivalents for anything labeled "GB"
+    mem_used_gb = mem_used_mb / 1024.0
+    mem_total_gb = mem_total / 1024.0
 
     # Disk (root fs)
     disk_used = disk_total = 0.0
@@ -251,7 +255,7 @@ def health(authorization: str | None = Header(default=None)):
     health_rows = [
         {"label": "VPS (Hetzner)", "value": f"{round(uptime_s / 86400, 1)}d up", "tone": "good" if uptime_s else "idle"},
         {"label": "CPU load", "value": cpu_pct, "tone": "warn" if cpu_pct.endswith("90%") or cpu_pct.endswith("95%") or cpu_pct.endswith("100%") else "good"},
-        {"label": "Memory", "value": f"{round(mem_used, 1)}/{round(mem_total, 1)} GB", "tone": "warn" if mem_total and mem_used / mem_total > 0.85 else "good"},
+        {"label": "Memory", "value": f"{round(mem_used_gb, 1)}/{round(mem_total_gb, 1)} GB", "tone": "warn" if mem_total_gb and mem_used_gb / mem_total_gb > 0.85 else "good"},
         {"label": "Disk", "value": f"{round(disk_used, 1)}/{round(disk_total, 1)} GB", "tone": "warn" if disk_total and disk_used / disk_total > 0.85 else "good"},
         {"label": "Docker", "value": "running" if any(s["name"] == "docker" and s["ok"] for s in services) else "down",
          "tone": "good" if any(s["name"] == "docker" and s["ok"] for s in services) else "warn"},
@@ -263,7 +267,7 @@ def health(authorization: str | None = Header(default=None)):
 
     telemetry = {
         "cpu": cpu_pct,
-        "mem": f"{round(mem_used, 1)} GB",
+        "mem": f"{round(mem_used_gb, 1)} GB",
         "lat": "—",
         "api": "—",
         "activeModel": "—",
@@ -276,7 +280,7 @@ def health(authorization: str | None = Header(default=None)):
         "telemetry": telemetry,
         "hostname": hostname,
         "uptime_seconds": round(uptime_s, 1),
-        "memory": {"used_mb": round(mem_used, 1), "total_mb": round(mem_total, 1)},
+        "memory": {"used_mb": round(mem_used_mb, 1), "total_mb": round(mem_total, 1), "used_gb": round(mem_used_gb, 1), "total_gb": round(mem_total_gb, 1)},
         "disk": {"used_gb": round(disk_used, 1), "total_gb": round(disk_total, 1)},
         "services": services,
         "containers": containers,

@@ -12,6 +12,10 @@
  *    are never echoed into responses or warnings.
  *  - Never performs mutations — read-only GETs only.
  *  - Falls back to mock provider data on any error so the UI keeps rendering.
+ *  - Normalizes the bridge envelope so the route returns a SINGLE
+ *    ProviderResult, never a double-nested one. The bridge already returns
+ *    { data, source, fetchedAt }; we unwrap `.data` and re-stamp our own
+ *    envelope so callers always see exactly one layer.
  */
 
 import { mockProvider } from './mock-provider';
@@ -38,20 +42,53 @@ async function safeFetch(url: string, token?: string, timeoutMs = 2500): Promise
   }
 }
 
+/**
+ * Unwrap a bridge response into the inner payload.
+ *
+ * The bridge always returns a ProviderResult envelope: `{ data, source,
+ * fetchedAt, warning? }`. We must NOT re-wrap that whole envelope — we extract
+ * `.data` and return it so the caller can stamp a single, clean envelope.
+ *
+ * This is also defensive: if a future/alternate upstream returns a BARE payload
+ * (no envelope), we accept it too. We detect an envelope by the presence of a
+ * `data` field that is itself an object/array (payloads are always structured).
+ */
+function unwrapBridge<T>(json: unknown): T | null {
+  if (json && typeof json === 'object' && 'data' in json) {
+    const candidate = (json as { data: unknown }).data;
+    // Accept any structured data (object or array). Reject primitives, which
+    // would indicate a malformed response.
+    if (candidate !== null && typeof candidate === 'object') {
+      return candidate as T;
+    }
+  }
+  // Bare payload fallback (forward-compatible with non-bridge upstreams).
+  if (json && typeof json === 'object') {
+    return json as T;
+  }
+  return null;
+}
+
 /** Try a live upstream; on any failure, fall back to the mock result. */
 async function withFallback<T>(
-  live: () => Promise<ProviderResult<T> | null>,
+  live: () => Promise<T | null>,
   mock: () => Promise<ProviderResult<T>>,
   warningMsg: string,
 ): Promise<ProviderResult<T>> {
   try {
-    const liveResult = await live();
-    if (liveResult) return liveResult;
+    const liveData = await live();
+    if (liveData !== null && liveData !== undefined) {
+      return ok(liveData, 'server');
+    }
   } catch {
     /* fall through to mock */
   }
   const mockResult = await mock();
-  return { ...mockResult, source: mockResult.source === 'server' ? 'stale' : mockResult.source, warning: warningMsg };
+  return {
+    ...mockResult,
+    source: mockResult.source === 'server' ? 'stale' : mockResult.source,
+    warning: warningMsg,
+  };
 }
 
 export const serverProvider: GarrettOSDataProvider = {
@@ -65,8 +102,8 @@ export const serverProvider: GarrettOSDataProvider = {
       async () => {
         const res = await safeFetch(`${bridgeUrl}/health`, bridgeToken);
         if (!res) return null;
-        const data = (await res.json()) as HealthPayload;
-        return ok(data, 'server');
+        const json = await res.json();
+        return unwrapBridge<HealthPayload>(json);
       },
       () => mockProvider.getHealth(),
       'VPS bridge unreachable — showing mock health',
@@ -83,8 +120,8 @@ export const serverProvider: GarrettOSDataProvider = {
       async () => {
         const res = await safeFetch(`${bridgeUrl}/agents`, bridgeToken);
         if (!res) return null;
-        const data = (await res.json()) as AgentsPayload;
-        return ok(data, 'server');
+        const json = await res.json();
+        return unwrapBridge<AgentsPayload>(json);
       },
       () => mockProvider.getAgents(),
       'VPS bridge unreachable — showing mock agents',
@@ -101,8 +138,8 @@ export const serverProvider: GarrettOSDataProvider = {
       async () => {
         const res = await safeFetch(`${bridgeUrl}/tasks`, bridgeToken);
         if (!res) return null;
-        const data = (await res.json()) as TasksPayload;
-        return ok(data, 'server');
+        const json = await res.json();
+        return unwrapBridge<TasksPayload>(json);
       },
       () => mockProvider.getTasks(),
       'VPS bridge unreachable — showing mock tasks',
@@ -110,26 +147,56 @@ export const serverProvider: GarrettOSDataProvider = {
   },
 
   async getMemory(): Promise<ProviderResult<MemoryPayload>> {
+    // Prefer the dedicated Obsidian memory API if set; otherwise fall back to
+    // the VPS bridge's /memory endpoint if the bridge is configured.
     const memoryUrl = process.env.OBSIDIAN_MEMORY_API_URL;
-    if (!memoryUrl) {
-      return withFallback(async () => null, () => mockProvider.getMemory(), 'Obsidian memory API URL not configured');
+    const bridgeUrl = process.env.OPENCLAW_VPS_BRIDGE_URL;
+    const bridgeToken = process.env.OPENCLAW_VPS_BRIDGE_TOKEN;
+    if (memoryUrl) {
+      return withFallback(
+        async () => {
+          const res = await safeFetch(`${memoryUrl}/memory`);
+          if (!res) return null;
+          const json = await res.json();
+          return unwrapBridge<MemoryPayload>(json);
+        },
+        () => mockProvider.getMemory(),
+        'Obsidian memory API unreachable — showing mock memory',
+      );
     }
-    return withFallback(
-      async () => {
-        const res = await safeFetch(`${memoryUrl}/memory`);
-        if (!res) return null;
-        const data = (await res.json()) as MemoryPayload;
-        return ok(data, 'server');
-      },
-      () => mockProvider.getMemory(),
-      'Obsidian memory API unreachable — showing mock memory',
-    );
+    if (bridgeUrl) {
+      return withFallback(
+        async () => {
+          const res = await safeFetch(`${bridgeUrl}/memory`, bridgeToken);
+          if (!res) return null;
+          const json = await res.json();
+          return unwrapBridge<MemoryPayload>(json);
+        },
+        () => mockProvider.getMemory(),
+        'VPS bridge memory unreachable — showing mock memory',
+      );
+    }
+    return withFallback(async () => null, () => mockProvider.getMemory(), 'No memory source configured');
   },
 
   async getIntegrations(): Promise<ProviderResult<IntegrationsPayload>> {
-    // Integrations status is derived from env presence, not an upstream call.
-    // Delegate to mock provider, which reads process.env via getIntegrationStatus.
-    return mockProvider.getIntegrations();
+    // Prefer the bridge's /integrations reachability probes when configured;
+    // otherwise derive from env presence via the mock provider.
+    const bridgeUrl = process.env.OPENCLAW_VPS_BRIDGE_URL;
+    const bridgeToken = process.env.OPENCLAW_VPS_BRIDGE_TOKEN;
+    if (!bridgeUrl) {
+      return mockProvider.getIntegrations();
+    }
+    return withFallback(
+      async () => {
+        const res = await safeFetch(`${bridgeUrl}/integrations`, bridgeToken);
+        if (!res) return null;
+        const json = await res.json();
+        return unwrapBridge<IntegrationsPayload>(json);
+      },
+      () => mockProvider.getIntegrations(),
+      'VPS bridge integrations unreachable — showing env-derived status',
+    );
   },
 
   async getEvents(): Promise<ProviderResult<EventsPayload>> {
@@ -142,8 +209,8 @@ export const serverProvider: GarrettOSDataProvider = {
       async () => {
         const res = await safeFetch(`${bridgeUrl}/events`, bridgeToken);
         if (!res) return null;
-        const data = (await res.json()) as EventsPayload;
-        return ok(data, 'server');
+        const json = await res.json();
+        return unwrapBridge<EventsPayload>(json);
       },
       () => mockProvider.getEvents(),
       'VPS bridge unreachable — showing mock events',
@@ -152,19 +219,33 @@ export const serverProvider: GarrettOSDataProvider = {
 
   async getModels(): Promise<ProviderResult<ModelsPayload>> {
     const litellmUrl = process.env.LITELLM_BASE_URL;
-    if (!litellmUrl) {
-      return withFallback(async () => null, () => mockProvider.getModels(), 'LiteLLM base URL not configured');
+    const bridgeUrl = process.env.OPENCLAW_VPS_BRIDGE_URL;
+    const bridgeToken = process.env.OPENCLAW_VPS_BRIDGE_TOKEN;
+    if (litellmUrl) {
+      return withFallback(
+        async () => {
+          const res = await safeFetch(`${litellmUrl}/v1/routes`);
+          if (!res) return null;
+          const json = await res.json();
+          return unwrapBridge<ModelsPayload>(json);
+        },
+        () => mockProvider.getModels(),
+        'LiteLLM gateway unreachable — showing mock model routes',
+      );
     }
-    return withFallback(
-      async () => {
-        const res = await safeFetch(`${litellmUrl}/v1/routes`);
-        if (!res) return null;
-        const data = (await res.json()) as ModelsPayload;
-        return ok(data, 'server');
-      },
-      () => mockProvider.getModels(),
-      'LiteLLM gateway unreachable — showing mock model routes',
-    );
+    if (bridgeUrl) {
+      return withFallback(
+        async () => {
+          const res = await safeFetch(`${bridgeUrl}/models`, bridgeToken);
+          if (!res) return null;
+          const json = await res.json();
+          return unwrapBridge<ModelsPayload>(json);
+        },
+        () => mockProvider.getModels(),
+        'VPS bridge models unreachable — showing mock model routes',
+      );
+    }
+    return withFallback(async () => null, () => mockProvider.getModels(), 'No model source configured');
   },
 };
 
