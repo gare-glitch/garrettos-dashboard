@@ -43,29 +43,32 @@ async function safeFetch(url: string, token?: string, timeoutMs = 2500): Promise
 }
 
 /**
- * Unwrap a bridge response into the inner payload.
+ * Unwrap a bridge response into the inner payload, defending against any level
+ * of accidental envelope nesting.
  *
- * The bridge always returns a ProviderResult envelope: `{ data, source,
- * fetchedAt, warning? }`. We must NOT re-wrap that whole envelope — we extract
- * `.data` and return it so the caller can stamp a single, clean envelope.
- *
- * This is also defensive: if a future/alternate upstream returns a BARE payload
- * (no envelope), we accept it too. We detect an envelope by the presence of a
- * `data` field that is itself an object/array (payloads are always structured).
+ * A bridge ProviderResult envelope is `{ data, source, fetchedAt, warning? }`.
+ * We detect an envelope STRICTLY by the presence of `data` AND `source` AND
+ * `fetchedAt` (a real payload never has all three), then recurse into `.data`
+ * up to a small depth so a double- or triple-nested envelope collapses to the
+ * real payload. If no envelope is detected, the value is returned as-is.
  */
-function unwrapBridge<T>(json: unknown): T | null {
-  if (json && typeof json === 'object' && 'data' in json) {
-    const candidate = (json as { data: unknown }).data;
-    // Accept any structured data (object or array). Reject primitives, which
-    // would indicate a malformed response.
-    if (candidate !== null && typeof candidate === 'object') {
-      return candidate as T;
-    }
+function unwrapBridge<T>(json: unknown, depth = 0): T | null {
+  if (json === null || json === undefined) return null;
+  if (typeof json !== 'object') return null;
+
+  const obj = json as Record<string, unknown>;
+  const isEnvelope =
+    'data' in obj &&
+    'source' in obj &&
+    'fetchedAt' in obj &&
+    typeof obj.fetchedAt === 'string';
+
+  if (isEnvelope && depth < 3) {
+    return unwrapBridge<T>(obj.data, depth + 1);
   }
-  // Bare payload fallback (forward-compatible with non-bridge upstreams).
-  if (json && typeof json === 'object') {
-    return json as T;
-  }
+
+  // No envelope detected → this is the payload (or a bare upstream payload).
+  if (typeof json === 'object') return json as T;
   return null;
 }
 

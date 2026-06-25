@@ -55,17 +55,21 @@ export default function OpenClawPage() {
       approvals: osApprovals,
     }),
   );
-  const fleet = agentsData?.fleet ?? osAgentFleet;
-  const graphNodes = agentsData?.graph.nodes ?? osAgents.nodes;
-  const graphEdges = agentsData?.graph.edges ?? osAgents.edges;
-  const approvals = agentsData?.approvals ?? osApprovals;
+  // Hardened defaults: never trust nested live fields to exist. Every access
+  // falls back to a safe array so the page can never crash on partial/empty
+  // bridge data or a malformed envelope.
+  const fleet = Array.isArray(agentsData?.fleet) ? agentsData!.fleet : osAgentFleet;
+  const graphNodes = Array.isArray(agentsData?.graph?.nodes) ? agentsData!.graph.nodes : osAgents.nodes;
+  const graphEdges = Array.isArray(agentsData?.graph?.edges) ? agentsData!.graph.edges : osAgents.edges;
+  const approvals = Array.isArray(agentsData?.approvals) ? agentsData!.approvals : osApprovals;
 
   // Provider-backed task queue.
   const { data: tasksData, source: tasksSource } = useGarrettOSData<TasksPayload>(
     '/api/garrettos/tasks',
     () => ({ tasks: osTasks }),
   );
-  const tasks = tasksData?.tasks ?? osTasks;
+  const tasks = Array.isArray(tasksData?.tasks) ? tasksData!.tasks : osTasks;
+  const activeFleetCount = fleet.filter((a) => a?.status === 'active').length;
 
   function openApproval(a: Approval) {
     setApproval(a);
@@ -128,7 +132,7 @@ export default function OpenClawPage() {
             title="Agent fleet"
             meta={
               <span className="flex items-center gap-2">
-                <StatusChip label={`${fleet.filter((a) => a.status === 'active').length}/${fleet.length} active`} tone="info" size="inline" />
+                <StatusChip label={`${activeFleetCount}/${fleet.length} active`} tone="info" size="inline" />
                 <StatusChip
                   label={agentsSource === 'server' ? 'Live' : agentsSource === 'stale' ? 'Stale' : 'Mock'}
                   tone={agentsSource === 'server' ? 'good' : agentsSource === 'stale' ? 'warn' : 'info'}
@@ -139,11 +143,15 @@ export default function OpenClawPage() {
             }
           />
           <div className="mt-2">
-            {view === 'grid' ? (
+            {fleet.length === 0 ? (
+              <GlassPanel variant="card" className="p-6 text-center text-body-sm text-on-surface-variant">
+                No agent sessions detected on the VPS.
+              </GlassPanel>
+            ) : view === 'grid' ? (
               <AgentGraph nodes={graphNodes} edges={graphEdges} />
             ) : (
               <AgentFleetTable rows={fleet} onConfigure={(id) => {
-                const row = fleet.find((a) => a.id === id);
+                const row = fleet.find((a) => a?.id === id);
                 if (row) openDrawer(row);
               }} />
             )}
@@ -191,30 +199,36 @@ export default function OpenClawPage() {
             meta={<StatusChip label={`${approvals.length} queued`} tone="warn" size="inline" />}
           />
           <GlassPanel variant="card" className="mt-2 p-4">
-            <StaggerReveal className="space-y-2">
-              {approvals.map((a) => (
-                <StaggerItem key={a.id}>
-                  <button
-                    type="button"
-                    onClick={() => openApproval(a)}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/5 bg-surface-container/30 px-3 py-3 text-left transition-colors hover:border-primary/20 hover:bg-primary/5"
-                  >
-                    <div className="min-w-0">
-                      <p className={cn(typography.bodySm, 'font-medium')}>{a.action}</p>
-                      <p className="text-[11px] text-outline">{a.agent}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <StatusChip
-                        label={`${a.risk} risk`}
-                        tone={a.risk === 'high' ? 'bad' : a.risk === 'medium' ? 'warn' : 'good'}
-                        size="inline"
-                      />
-                      <GarrettIcon name="chevron_right" size={16} className="text-outline" />
-                    </div>
-                  </button>
-                </StaggerItem>
-              ))}
-            </StaggerReveal>
+            {approvals.length === 0 ? (
+              <p className="py-4 text-center text-body-sm text-on-surface-variant">
+                No pending approvals.
+              </p>
+            ) : (
+              <StaggerReveal className="space-y-2">
+                {approvals.map((a) => (
+                  <StaggerItem key={a.id}>
+                    <button
+                      type="button"
+                      onClick={() => openApproval(a)}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/5 bg-surface-container/30 px-3 py-3 text-left transition-colors hover:border-primary/20 hover:bg-primary/5"
+                    >
+                      <div className="min-w-0">
+                        <p className={cn(typography.bodySm, 'font-medium')}>{a.action}</p>
+                        <p className="text-[11px] text-outline">{a.agent}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <StatusChip
+                          label={`${a.risk} risk`}
+                          tone={a.risk === 'high' ? 'bad' : a.risk === 'medium' ? 'warn' : 'good'}
+                          size="inline"
+                        />
+                        <GarrettIcon name="chevron_right" size={16} className="text-outline" />
+                      </div>
+                    </button>
+                  </StaggerItem>
+                ))}
+              </StaggerReveal>
+            )}
           </GlassPanel>
         </ScrollReveal>
 
@@ -237,21 +251,30 @@ export default function OpenClawPage() {
 
       {/* tmux sessions */}
       <ScrollReveal>
-        <SectionHeaderCompact title="tmux sessions" meta={<StatusChip label="3 attached" tone="info" size="inline" />} />
-        <StaggerReveal className="mt-2 grid gap-gutter md:grid-cols-3">
-          {osTmuxSessions.map((s) => (
-            <StaggerItem key={s.id}>
-              <GlassPanel variant="card" interactive className="p-4">
-                <div className="flex items-center justify-between">
-                  <p className={cn(typography.bodyLg, 'font-mono font-medium')}>{s.name}</p>
-                  <BreathingPip tone={s.attached ? 'secondary' : 'idle'} pulse={s.attached} />
-                </div>
-                <p className="mt-1.5 font-mono text-[11px] text-outline">{s.command}</p>
-                <p className="mt-2 text-[10px] text-outline">{s.attached ? 'Attached' : 'Detached'}</p>
-              </GlassPanel>
-            </StaggerItem>
-          ))}
-        </StaggerReveal>
+        <SectionHeaderCompact
+          title="tmux sessions"
+          meta={<StatusChip label={`${osTmuxSessions.filter((s) => s?.attached).length} attached`} tone="info" size="inline" />}
+        />
+        {osTmuxSessions.length === 0 ? (
+          <GlassPanel variant="card" className="mt-2 p-6 text-center text-body-sm text-on-surface-variant">
+            No tmux sessions detected.
+          </GlassPanel>
+        ) : (
+          <StaggerReveal className="mt-2 grid gap-gutter md:grid-cols-3">
+            {osTmuxSessions.map((s) => (
+              <StaggerItem key={s.id}>
+                <GlassPanel variant="card" interactive className="p-4">
+                  <div className="flex items-center justify-between">
+                    <p className={cn(typography.bodyLg, 'font-mono font-medium')}>{s.name}</p>
+                    <BreathingPip tone={s.attached ? 'secondary' : 'idle'} pulse={s.attached} />
+                  </div>
+                  <p className="mt-1.5 font-mono text-[11px] text-outline">{s.command}</p>
+                  <p className="mt-2 text-[10px] text-outline">{s.attached ? 'Attached' : 'Detached'}</p>
+                </GlassPanel>
+              </StaggerItem>
+            ))}
+          </StaggerReveal>
+        )}
       </ScrollReveal>
 
       <ApprovalDialog

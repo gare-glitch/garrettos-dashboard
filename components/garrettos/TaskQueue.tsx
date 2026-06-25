@@ -16,11 +16,11 @@ const statusTone: Record<OsTask['status'], 'info' | 'good' | 'warn' | 'bad' | 'i
 };
 
 export function TaskQueue({
-  tasks,
+  tasks = [],
   className,
   limit = 5,
 }: {
-  tasks: OsTask[];
+  tasks?: OsTask[];
   className?: string;
   limit?: number;
 }) {

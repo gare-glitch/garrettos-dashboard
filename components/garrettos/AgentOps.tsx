@@ -135,7 +135,7 @@ export type AgentFleetRow = {
   sparkPath?: string;
 };
 
-export function AgentFleetTable({ rows, onConfigure }: { rows: AgentFleetRow[]; onConfigure?: (id: string) => void }) {
+export function AgentFleetTable({ rows = [], onConfigure }: { rows?: AgentFleetRow[]; onConfigure?: (id: string) => void }) {
   return (
     <GlassPanel variant="card" className="overflow-hidden">
       <div className="overflow-x-auto">
