@@ -20,6 +20,7 @@ import type {
   IntegrationsPayload,
   EventsPayload,
   ModelsPayload,
+  LogsPayload,
 } from './types';
 
 export type GarrettOSDataProvider = {
@@ -30,6 +31,7 @@ export type GarrettOSDataProvider = {
   getIntegrations(): Promise<ProviderResult<IntegrationsPayload>>;
   getEvents(): Promise<ProviderResult<EventsPayload>>;
   getModels(): Promise<ProviderResult<ModelsPayload>>;
+  getLogs(scope?: 'litellm' | 'bridge' | 'tmux' | 'all'): Promise<ProviderResult<LogsPayload>>;
 };
 
 export type DataMode = 'mock' | 'server';

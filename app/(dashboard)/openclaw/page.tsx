@@ -16,6 +16,13 @@ import {
   type Approval,
 } from '@/components/garrettos';
 import { ApprovalDialog, AgentFleetTable, AgentDrawer } from '@/components/garrettos/AgentOps';
+import {
+  AgentHealthGrid,
+  BlockedRescue,
+  LogConsole,
+  SessionMonitor,
+  TaskBoard,
+} from '@/components/garrettos/agent-ops';
 import { GarrettIcon } from '@/components/garrettos/GarrettIcon';
 import { BreathingPip } from '@/components/garrettos/BreathingPip';
 import { cn } from '@/lib/utils';
@@ -29,7 +36,13 @@ import {
   osTmuxSessions,
 } from '@/data/os-mock';
 import { useGarrettOSData } from '@/lib/garrettos/use-garrettos-data';
-import type { AgentsPayload, TasksPayload } from '@/lib/garrettos/types';
+import type {
+  AgentsPayload,
+  EventsPayload,
+  HealthPayload,
+  TasksPayload,
+  TmuxSession,
+} from '@/lib/garrettos/types';
 
 type View = 'grid' | 'table';
 
@@ -45,30 +58,44 @@ export default function OpenClawPage() {
     temperature: 0.2,
   });
 
-  // Provider-backed agent fleet + approvals (falls back to mock on any failure).
-  const { data: agentsData, source: agentsSource } = useGarrettOSData<AgentsPayload>(
+  // --- Provider-backed live data (all fall back to mock on any failure) ---
+  const { data: healthData, source: healthSource, warning: healthWarning } = useGarrettOSData<HealthPayload>(
+    '/api/garrettos/health',
+    () => ({ health: [], telemetry: { cpu: '—', mem: '—', lat: '—', api: '—', activeModel: '—', agentStatus: 'Idle', activeAgents: 0 } }),
+  );
+
+  const { data: agentsData, source: agentsSource, warning: agentsWarning } = useGarrettOSData<AgentsPayload>(
     '/api/garrettos/agents',
     () => ({
       sessions: osAgentFleet.map((f) => ({ id: f.id, name: f.name, model: f.model, status: f.status, latency: f.latency, uptime: f.uptime })),
       fleet: osAgentFleet,
       graph: { nodes: osAgents.nodes, edges: osAgents.edges },
       approvals: osApprovals,
+      tmux_sessions: osTmuxSessions as unknown as TmuxSession[],
     }),
   );
-  // Hardened defaults: never trust nested live fields to exist. Every access
-  // falls back to a safe array so the page can never crash on partial/empty
-  // bridge data or a malformed envelope.
+
+  const { data: tasksData, source: tasksSource, warning: tasksWarning } = useGarrettOSData<TasksPayload>(
+    '/api/garrettos/tasks',
+    () => ({ tasks: osTasks }),
+  );
+
+  const { data: eventsData, source: eventsSource, warning: eventsWarning } = useGarrettOSData<EventsPayload>(
+    '/api/garrettos/events',
+    () => ({ events: [] }),
+  );
+
+  // --- Hardened defaults (no .map on undefined, no unguarded nested access) ---
   const fleet = Array.isArray(agentsData?.fleet) ? agentsData!.fleet : osAgentFleet;
   const graphNodes = Array.isArray(agentsData?.graph?.nodes) ? agentsData!.graph.nodes : osAgents.nodes;
   const graphEdges = Array.isArray(agentsData?.graph?.edges) ? agentsData!.graph.edges : osAgents.edges;
   const approvals = Array.isArray(agentsData?.approvals) ? agentsData!.approvals : osApprovals;
-
-  // Provider-backed task queue.
-  const { data: tasksData, source: tasksSource } = useGarrettOSData<TasksPayload>(
-    '/api/garrettos/tasks',
-    () => ({ tasks: osTasks }),
-  );
+  const tmuxSessions: TmuxSession[] = Array.isArray(agentsData?.tmux_sessions)
+    ? agentsData!.tmux_sessions
+    : osTmuxSessions as unknown as TmuxSession[];
   const tasks = Array.isArray(tasksData?.tasks) ? tasksData!.tasks : osTasks;
+  const events = Array.isArray(eventsData?.events) ? eventsData!.events : [];
+  const agentHealth = healthData?.agent_health ?? null;
   const activeFleetCount = fleet.filter((a) => a?.status === 'active').length;
 
   function openApproval(a: Approval) {
@@ -95,8 +122,8 @@ export default function OpenClawPage() {
     <div className="space-y-6 md:space-y-8">
       <SectionHeader
         eyebrow="OpenClaw Control"
-        title="Agent orchestration and approvals"
-        description="Agent fleet, approvals, guardrails, tmux sessions, and per-agent configuration. Approvals are mock."
+        title="Agent Operations Center"
+        description="Live tmux sessions, task board, event stream, agent health, and blocked-task rescue. Read-only — no mutating actions yet."
         action={
           <div className="flex items-center gap-1 rounded-full border border-white/8 bg-surface-container/40 p-1">
             <button
@@ -125,8 +152,25 @@ export default function OpenClawPage() {
         }
       />
 
+      {/* Blocked-task rescue — shown prominently only when blocked tasks exist */}
+      <BlockedRescue tasks={tasks} />
+
+      {/* Top row: session monitor + agent health */}
+      <div className="grid grid-cols-1 gap-gutter lg:grid-cols-2">
+        <SessionMonitor
+          sessions={tmuxSessions}
+          source={agentsSource}
+          warning={agentsWarning}
+        />
+        <AgentHealthGrid
+          health={agentHealth}
+          source={healthSource}
+          warning={healthWarning}
+        />
+      </div>
+
+      {/* Agent fleet (grid or table) + guardrails */}
       <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3">
-        {/* Agent fleet (grid or table) */}
         <ScrollReveal className="lg:col-span-2">
           <SectionHeaderCompact
             title="Agent fleet"
@@ -150,10 +194,13 @@ export default function OpenClawPage() {
             ) : view === 'grid' ? (
               <AgentGraph nodes={graphNodes} edges={graphEdges} />
             ) : (
-              <AgentFleetTable rows={fleet} onConfigure={(id) => {
-                const row = fleet.find((a) => a?.id === id);
-                if (row) openDrawer(row);
-              }} />
+              <AgentFleetTable
+                rows={fleet}
+                onConfigure={(id) => {
+                  const row = fleet.find((a) => a?.id === id);
+                  if (row) openDrawer(row);
+                }}
+              />
             )}
           </div>
         </ScrollReveal>
@@ -191,8 +238,11 @@ export default function OpenClawPage() {
         </ScrollReveal>
       </div>
 
+      {/* Task board grouped by status */}
+      <TaskBoard tasks={tasks} source={tasksSource} warning={tasksWarning} />
+
+      {/* Pending approvals + compact task queue */}
       <div className="grid grid-cols-1 gap-gutter lg:grid-cols-2">
-        {/* Pending approvals */}
         <ScrollReveal>
           <SectionHeaderCompact
             title="Pending approvals"
@@ -200,9 +250,7 @@ export default function OpenClawPage() {
           />
           <GlassPanel variant="card" className="mt-2 p-4">
             {approvals.length === 0 ? (
-              <p className="py-4 text-center text-body-sm text-on-surface-variant">
-                No pending approvals.
-              </p>
+              <p className="py-4 text-center text-body-sm text-on-surface-variant">No pending approvals.</p>
             ) : (
               <StaggerReveal className="space-y-2">
                 {approvals.map((a) => (
@@ -232,10 +280,9 @@ export default function OpenClawPage() {
           </GlassPanel>
         </ScrollReveal>
 
-        {/* Task queue */}
         <ScrollReveal delay={0.05}>
           <SectionHeaderCompact
-            title="Task queue"
+            title="Compact task queue"
             meta={
               <StatusChip
                 label={tasksSource === 'server' ? 'Live' : tasksSource === 'stale' ? 'Stale' : 'Mock'}
@@ -249,26 +296,35 @@ export default function OpenClawPage() {
         </ScrollReveal>
       </div>
 
-      {/* tmux sessions */}
+      {/* Event/log stream with filters */}
+      <LogConsole events={events} source={eventsSource} warning={eventsWarning} />
+
+      {/* tmux sessions (legacy card view, kept alongside the new monitor) */}
       <ScrollReveal>
         <SectionHeaderCompact
           title="tmux sessions"
-          meta={<StatusChip label={`${osTmuxSessions.filter((s) => s?.attached).length} attached`} tone="info" size="inline" />}
+          meta={
+            <StatusChip
+              label={`${tmuxSessions.filter((s) => s?.attached).length} attached`}
+              tone="info"
+              size="inline"
+            />
+          }
         />
-        {osTmuxSessions.length === 0 ? (
+        {tmuxSessions.length === 0 ? (
           <GlassPanel variant="card" className="mt-2 p-6 text-center text-body-sm text-on-surface-variant">
             No tmux sessions detected.
           </GlassPanel>
         ) : (
           <StaggerReveal className="mt-2 grid gap-gutter md:grid-cols-3">
-            {osTmuxSessions.map((s) => (
-              <StaggerItem key={s.id}>
+            {tmuxSessions.map((s) => (
+              <StaggerItem key={s.name}>
                 <GlassPanel variant="card" interactive className="p-4">
                   <div className="flex items-center justify-between">
                     <p className={cn(typography.bodyLg, 'font-mono font-medium')}>{s.name}</p>
                     <BreathingPip tone={s.attached ? 'secondary' : 'idle'} pulse={s.attached} />
                   </div>
-                  <p className="mt-1.5 font-mono text-[11px] text-outline">{s.command}</p>
+                  <p className="mt-1.5 font-mono text-[11px] text-outline">{s.command ?? '—'}</p>
                   <p className="mt-2 text-[10px] text-outline">{s.attached ? 'Attached' : 'Detached'}</p>
                 </GlassPanel>
               </StaggerItem>

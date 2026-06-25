@@ -76,7 +76,46 @@ export type AgentSession = {
 };
 
 /** A queued/running/done task in the OpenClaw task queue. */
-export type TaskRun = OsTask;
+export type TaskRun = OsTask & {
+  /** ISO/relative time the task was last updated (bridge frontmatter). */
+  updated?: string;
+  /** Path to the task's log file, if the bridge surfaced one. */
+  logPath?: string;
+  /** Suggested next action for a blocked task (bridge frontmatter). */
+  nextAction?: string;
+};
+
+/** A tmux session surfaced by the bridge. */
+export type TmuxSession = {
+  name: string;
+  attached: boolean;
+  status: 'active' | 'idle';
+  last_seen?: string;
+  command?: string;
+  windows?: string;
+};
+
+/** Per-service agent health booleans (M9 ops center). */
+export type AgentHealth = {
+  opencode: boolean;
+  claude: boolean;
+  openclaw: boolean;
+  litellm: boolean;
+  ollama: boolean;
+  valkey: boolean;
+  qdrant: boolean;
+  tmux: boolean;
+  docker: boolean;
+};
+
+/** A sanitized log line from the bridge /logs endpoint. */
+export type LogLine = {
+  id: string;
+  time: string;
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+  source: string;
+  message: string;
+};
 
 /** Aggregate memory index stats. */
 export type MemoryStats = {
@@ -134,8 +173,11 @@ export type RevenueSignal = OsOpportunity & {
   confidence: number;
 };
 
-/** Event stream item — reused 1:1 from the UI OsEvent. */
-export type EventStreamItem = OsEvent;
+/** Event stream item — reused 1:1 from the UI OsEvent, plus an optional
+ * scope tag for the ops-center filter (all/errors/agents/system). */
+export type EventStreamItem = OsEvent & {
+  scope?: 'all' | 'errors' | 'agents' | 'system';
+};
 
 /** OpenClaw opportunity — same as RevenueSignal under a domain name. */
 export type OpenClawOpportunity = RevenueSignal;
@@ -155,6 +197,8 @@ export type HealthPayload = {
     agentStatus: string;
     activeAgents: number;
   };
+  /** Optional agent-health block surfaced by the bridge (M9). */
+  agent_health?: AgentHealth;
 };
 
 export type AgentsPayload = {
@@ -162,6 +206,10 @@ export type AgentsPayload = {
   fleet: AgentFleetRow[];
   graph: { nodes: OsAgentNode[]; edges: OsAgentEdge[] };
   approvals: OsApproval[];
+  /** Optional tmux sessions surfaced by the bridge (M9). */
+  tmux_sessions?: TmuxSession[];
+  /** Optional detected processes surfaced by the bridge (M9). */
+  detected_processes?: { name: string; status: string; pids: number; last_seen: string }[];
 };
 
 export type TasksPayload = {
@@ -188,4 +236,10 @@ export type EventsPayload = {
 export type ModelsPayload = {
   routes: ModelRoute[];
   usage: ApiUsage[];
+};
+
+/** Payload for GET /api/garrettos/logs (M9). */
+export type LogsPayload = {
+  scope: 'litellm' | 'bridge' | 'tmux' | 'all';
+  lines: LogLine[];
 };

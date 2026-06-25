@@ -127,7 +127,11 @@ Mock fallback is **universal and automatic**. No panel ever goes blank.
 | Home event stream | `GARRETTOS_DATA_MODE=server` + `OPENCLAW_VPS_BRIDGE_URL` | `osEvents` |
 | System model routing matrix | `server` + `LITELLM_BASE_URL` | `osModelRoutes` |
 | OpenClaw agent fleet / approvals | `server` + `OPENCLAW_VPS_BRIDGE_URL` | `osAgentFleet`, `osApprovals` |
-| OpenClaw task queue | `server` + `OPENCLAW_VPS_BRIDGE_URL` | `osTasks` |
+| OpenClaw task board | `server` + `OPENCLAW_VPS_BRIDGE_URL` | `osTasks` |
+| OpenClaw session monitor (tmux) | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/agents.tmux_sessions`) | `osTmuxSessions` |
+| OpenClaw agent health grid | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/health.agent_health`) | idle/unknown per service |
+| OpenClaw event/log stream (filtered) | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/events` with `scope`) | `osEvents` |
+| Scoped logs (`/api/garrettos/logs`) | `server` + `OPENCLAW_VPS_BRIDGE_URL` (`/logs?scope=`) | synthetic mock lines |
 | Memory neural index / stats | `server` + `OBSIDIAN_MEMORY_API_URL` | `osNeuralIndex`, `osMemoryStats` |
 | Settings live-data readiness | derived from env presence | `liveDataEnvs` |
 | System containers / logs / terminal / topology | (not yet provider-backed) | mock |
@@ -141,10 +145,11 @@ The VPS runs a small read-only HTTP daemon ("the bridge") that the Vercel
 frontend calls. It must:
 
 1. Expose read-only JSON endpoints under `OPENCLAW_VPS_BRIDGE_URL`:
-   - `GET /health`  → `HealthPayload`
-   - `GET /agents`  → `AgentsPayload`
-   - `GET /tasks`   → `TasksPayload`
-   - `GET /events`  → `EventsPayload`
+   - `GET /health`  → `HealthPayload` (includes `agent_health` for the ops grid)
+   - `GET /agents`  → `AgentsPayload` (includes `tmux_sessions` + `detected_processes`)
+   - `GET /tasks`   → `TasksPayload` (each task carries `updated`, `log_path`, `next_action`)
+   - `GET /events`  → `EventsPayload` (each event carries a `scope` of `errors`/`agents`/`system`)
+   - `GET /logs?scope=litellm|bridge|tmux|all` → `LogsPayload` (sanitized log lines)
 2. Authenticate via a single bearer token (`OPENCLAW_VPS_BRIDGE_TOKEN`), checked
    as `Authorization: Bearer <token>`. Reject 401 on mismatch.
 3. Never accept mutations. POST/PUT/DELETE return 405.
@@ -192,3 +197,66 @@ frontend calls. It must:
 - **Timeout-bounded:** upstream calls abort after 2.5s so a slow VPS can't hang
   a Vercel request.
 - **Mock-first:** the app is fully functional with zero env vars configured.
+
+## 8. Agent Operations Center (`/openclaw`)
+
+`/openclaw` is the first truly live operations page. It is the command center
+for background AI work and is built entirely on the provider + bridge layer.
+**Read-only by design — no mutating actions are wired yet.**
+
+### Panels and their data sources
+
+| Panel | Component | Route | Live field |
+|-------|-----------|-------|------------|
+| Session monitor | `SessionMonitor` | `/api/garrettos/agents` | `tmux_sessions[]` (name, attached, command, windows, last_seen) |
+| Task board (by status) | `TaskBoard` | `/api/garrettos/tasks` | `tasks[]` (status, priority, agent, updated, log_path) |
+| Event / log stream | `LogConsole` | `/api/garrettos/events` | `events[]` with `scope` (all/errors/agents/system) |
+| Blocked-task rescue | `BlockedRescue` | `/api/garrettos/tasks` | `tasks[]` where `status === 'blocked'` + `next_action` |
+| Agent health grid | `AgentHealthGrid` | `/api/garrettos/health` | `agent_health` (9 service booleans) |
+| Agent fleet (graph/table) | `AgentGraph` / `AgentFleetTable` | `/api/garrettos/agents` | `fleet[]`, `graph` |
+| Pending approvals | inline | `/api/garrettos/agents` | `approvals[]` (mock until bridge can derive them) |
+| Compact task queue | `TaskQueue` | `/api/garrettos/tasks` | `tasks[]` |
+
+### Source diagnostics
+
+Every panel renders a `SourceTag` / `StatusChip` showing whether its data is
+**Live** (`source: 'server'`), **Stale** (`source: 'stale'`), or **Mock**
+(`source: 'mock'`). When the server provider falls back to mock, the panel
+also surfaces the `warning` string returned by the hook (e.g. "VPS bridge
+agents unreachable — showing mock agent fleet"). This makes fallback
+observable instead of silent.
+
+### Scoped logs endpoint
+
+`GET /api/garrettos/logs?scope=litellm|bridge|tmux|all` proxies the bridge
+`/logs` endpoint and returns `LogsPayload` (`{ scope, lines[] }`). Lines are
+sanitized by the bridge's `scrub()` (tokens/keys redacted) and capped. The
+endpoint is read-only, token-protected at the bridge, and falls back to a
+synthetic mock log set when no bridge is configured.
+
+### Bridge contract additions (M9)
+
+The Hetzner bridge (`bridge/garrettos_bridge.py`) was hardened to expose the
+data the ops center needs, without compromising the read-only contract:
+
+- `/health` now returns `agent_health` — booleans for OpenCode, Claude Code,
+  OpenClaw, LiteLLM, Ollama, Valkey, Qdrant, tmux, and Docker, probed via
+  `pgrep`, `systemctl is-active`, and local HTTP pings (no remote calls).
+- `/agents` now returns `tmux_sessions` enriched with each pane's current
+  command (`tmux list-panes -a -F`, read-only) and window count, plus
+  `detected_processes` for `opencode`/`claude`/`openclaw`/`codex`/`litellm`/`ollama`.
+- `/tasks` now surfaces `updated`, `log_path`, and `next_action` parsed from
+  each task markdown file's frontmatter.
+- `/events` now tags every event with a `scope` (`errors`/`agents`/`system`)
+  so the console filter works against live data, and adds an OpenClaw
+  journal source.
+- New `/logs?scope=litellm|bridge|tmux|all` endpoint — sanitized, capped,
+  token-protected log lines. No command execution from HTTP; only reads
+  `journalctl`, `tmux ls`, and a synthetic bridge uptime line.
+
+### Rules honored
+
+- No mutating actions (no approve/deny/restart/deploy buttons do anything).
+- No secrets exposed (bridge scrubs all output; tokens are server-only).
+- Build stays green; mock fallback is universal.
+

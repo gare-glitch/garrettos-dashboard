@@ -21,7 +21,7 @@
 import { mockProvider } from './mock-provider';
 import type { GarrettOSDataProvider } from './providers';
 import { ok, isServerBridgeConfigured } from './providers';
-import type { ProviderResult, HealthPayload, AgentsPayload, TasksPayload, MemoryPayload, IntegrationsPayload, EventsPayload, ModelsPayload } from './types';
+import type { ProviderResult, HealthPayload, AgentsPayload, TasksPayload, MemoryPayload, IntegrationsPayload, EventsPayload, ModelsPayload, LogsPayload } from './types';
 
 /** Fetch helper with a short timeout so a slow upstream can't hang a request. */
 async function safeFetch(url: string, token?: string, timeoutMs = 2500): Promise<Response | null> {
@@ -249,6 +249,24 @@ export const serverProvider: GarrettOSDataProvider = {
       );
     }
     return withFallback(async () => null, () => mockProvider.getModels(), 'No model source configured');
+  },
+
+  async getLogs(scope: 'litellm' | 'bridge' | 'tmux' | 'all' = 'bridge'): Promise<ProviderResult<LogsPayload>> {
+    const bridgeUrl = process.env.OPENCLAW_VPS_BRIDGE_URL;
+    const bridgeToken = process.env.OPENCLAW_VPS_BRIDGE_TOKEN;
+    if (!bridgeUrl) {
+      return withFallback(async () => null, () => mockProvider.getLogs(scope), 'VPS bridge URL not configured');
+    }
+    return withFallback(
+      async () => {
+        const res = await safeFetch(`${bridgeUrl}/logs?scope=${encodeURIComponent(scope)}`, bridgeToken);
+        if (!res) return null;
+        const json = await res.json();
+        return unwrapBridge<LogsPayload>(json);
+      },
+      () => mockProvider.getLogs(scope),
+      'VPS bridge logs unreachable — showing mock logs',
+    );
   },
 };
 

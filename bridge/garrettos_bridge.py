@@ -143,6 +143,22 @@ def tone_for_status(ok: bool, idle: bool = False) -> str:
     return "warn"
 
 
+def _proc_up(name: str) -> bool:
+    """True if a process matching `name` is running (read-only pgrep)."""
+    return safe_run(["pgrep", "-f", name]) is not None
+
+
+def _http_ok(url: str, timeout: float = SUBPROCESS_TIMEOUT) -> bool:
+    """True if a local HTTP endpoint returns 200. Used for service probes."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Auth middleware (applied to every data endpoint via dependency)
 # ---------------------------------------------------------------------------
@@ -284,6 +300,17 @@ def health(authorization: str | None = Header(default=None)):
         "disk": {"used_gb": round(disk_used, 1), "total_gb": round(disk_total, 1)},
         "services": services,
         "containers": containers,
+        "agent_health": {
+            "opencode": _proc_up("opencode"),
+            "claude": _proc_up("claude"),
+            "openclaw": safe_run(["systemctl", "is-active", "--quiet", "openclaw"]) is not None or _proc_up("openclaw"),
+            "litellm": _http_ok(f"{LITELLM_URL}/v1/models") or safe_run(["systemctl", "is-active", "--quiet", "litellm"]) is not None,
+            "ollama": _http_ok(f"{OLLAMA_URL}/api/tags") or safe_run(["systemctl", "is-active", "--quiet", "ollama"]) is not None,
+            "valkey": safe_run(["redis-cli", "-u", VALKEY_URL, "ping"]) == "PONG",
+            "qdrant": _http_ok(f"{QDRANT_URL}/") or "qdrant" in container_names,
+            "tmux": safe_run(["tmux", "ls"]) is not None,
+            "docker": safe_run(["docker", "info"]) is not None,
+        },
     })
 
 
@@ -295,10 +322,19 @@ def health(authorization: str | None = Header(default=None)):
 def agents(authorization: str | None = Header(default=None)):
     require_token(authorization)
 
-    # tmux sessions
+    # tmux sessions — enrich with the pane's current command (read-only
+    # `tmux list-panes -F`). Never executes anything; just reads state.
     tmux_raw = safe_run(["tmux", "ls"])
     tmux_sessions: list[dict[str, Any]] = []
     if tmux_raw:
+        # Build a name → active-pane-command map for enrichment.
+        pane_cmds: dict[str, str] = {}
+        panes_raw = safe_run(["tmux", "list-panes", "-a", "-F", "#{session_name}\t#{pane_current_command}"])
+        if panes_raw:
+            for line in panes_raw.splitlines():
+                parts = line.split("\t")
+                if len(parts) == 2:
+                    pane_cmds.setdefault(parts[0], parts[1])
         for line in tmux_raw.splitlines():
             # e.g. "openclaw-bridge: 1 windows (created ...) (attached)"
             name = line.split(":")[0].strip()
@@ -310,10 +346,12 @@ def agents(authorization: str | None = Header(default=None)):
                 "attached": attached,
                 "status": "active" if attached else "idle",
                 "last_seen": now_iso(),
+                "command": pane_cmds.get(name, "—"),
+                "windows": line.split(":")[1].strip().split()[0] if ":" in line else "1",
             })
 
     # Detectable agent processes (read-only `pgrep`/`ps`, never executing them)
-    proc_names = ["opencode", "claude", "openclaw", "codex"]
+    proc_names = ["opencode", "claude", "openclaw", "codex", "litellm", "ollama"]
     detected: list[dict[str, Any]] = []
     for name in proc_names:
         out = safe_run(["pgrep", "-f", name])
@@ -328,7 +366,7 @@ def agents(authorization: str | None = Header(default=None)):
 
     # Build AgentSession rows from detected processes + tmux sessions.
     sessions: list[dict[str, Any]] = []
-    for i, d in enumerate(detected):
+    for d in detected:
         sessions.append({
             "id": f"agent-{d['name']}",
             "name": d["name"],
@@ -336,6 +374,7 @@ def agents(authorization: str | None = Header(default=None)):
             "status": d["status"],
             "latency": "—",
             "uptime": "—",
+            "last_seen": d["last_seen"],
         })
     # Ensure at least one row reflects tmux if no process matched.
     if not sessions and tmux_sessions:
@@ -347,6 +386,7 @@ def agents(authorization: str | None = Header(default=None)):
                 "status": s["status"],
                 "latency": "—",
                 "uptime": "—",
+                "last_seen": s["last_seen"],
             })
 
     fleet = [{
@@ -421,6 +461,9 @@ def tasks(authorization: str | None = Header(default=None)):
                     "status": status,
                     "agent": fm.get("agent", "OpenClaw"),
                     "priority": priority,
+                    "updated": fm.get("updated", fm.get("date", "—")),
+                    "log_path": fm.get("log_path", fm.get("log", "")),
+                    "next_action": fm.get("next_action", fm.get("next", "")),
                 })
         except Exception:
             continue
@@ -438,6 +481,14 @@ def events(authorization: str | None = Header(default=None)):
 
     out: list[dict[str, Any]] = []
 
+    def classify_scope(source: str, message: str, tone: str) -> str:
+        s = (source + " " + message).lower()
+        if tone == "bad" or "error" in s:
+            return "errors"
+        if any(k in source.lower() for k in ("tmux", "openclaw", "opencode", "claude", "codex", "agent")):
+            return "agents"
+        return "system"
+
     # systemd litellm last lines (journalctl, read-only)
     journal = safe_run(["journalctl", "-u", "litellm", "-n", "20", "--no-pager", "--output=cat"])
     if journal:
@@ -446,12 +497,14 @@ def events(authorization: str | None = Header(default=None)):
             if not line:
                 continue
             level = "ERROR" if "error" in line.lower() else "WARN" if "warn" in line.lower() else "INFO"
+            tone = "bad" if level == "ERROR" else "warn" if level == "WARN" else "info"
             out.append({
                 "id": f"litellm-{len(out)}",
                 "time": datetime.now(timezone.utc).strftime("%H:%M"),
                 "source": "LiteLLM",
                 "message": line[:200],
-                "tone": "bad" if level == "ERROR" else "warn" if level == "WARN" else "info",
+                "tone": tone,
+                "scope": classify_scope("LiteLLM", line, tone),
             })
 
     # tmux session list as events
@@ -466,7 +519,26 @@ def events(authorization: str | None = Header(default=None)):
                     "source": "tmux",
                     "message": f"session {name} {'attached' if 'attached' in line.lower() else 'detached'}",
                     "tone": "info",
+                    "scope": "agents",
                 })
+
+    # OpenClaw/agent events from its systemd unit, if present (read-only)
+    oc_journal = safe_run(["journalctl", "-u", "openclaw", "-n", "10", "--no-pager", "--output=cat"])
+    if oc_journal:
+        for line in oc_journal.splitlines()[:10]:
+            line = scrub(line)
+            if not line:
+                continue
+            level = "ERROR" if "error" in line.lower() else "WARN" if "warn" in line.lower() else "INFO"
+            tone = "bad" if level == "ERROR" else "warn" if level == "WARN" else "info"
+            out.append({
+                "id": f"openclaw-{len(out)}",
+                "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                "source": "OpenClaw",
+                "message": line[:200],
+                "tone": tone,
+                "scope": "agents" if tone != "bad" else "errors",
+            })
 
     # Bridge status event
     out.append({
@@ -475,10 +547,84 @@ def events(authorization: str | None = Header(default=None)):
         "source": "Bridge",
         "message": "garrettos-bridge healthy",
         "tone": "good",
+        "scope": "system",
     })
 
     # Dedup-ish cap at 30
     return envelope({"events": out[:30]})
+
+
+# ---------------------------------------------------------------------------
+# /logs — scoped, sanitized, read-only log lines
+# ---------------------------------------------------------------------------
+
+@app.get("/logs")
+def logs(authorization: str | None = Header(default=None), scope: str = "bridge"):
+    require_token(authorization)
+    scope_q = (scope or "bridge").lower().strip()
+    lines: list[dict[str, Any]] = []
+
+    if scope_q in ("litellm", "all"):
+        journal = safe_run(["journalctl", "-u", "litellm", "-n", "40", "--no-pager", "--output=cat"])
+        if journal:
+            for i, line in enumerate(journal.splitlines()[:40]):
+                line = scrub(line)
+                if not line:
+                    continue
+                lvl = "ERROR" if "error" in line.lower() else "WARN" if "warn" in line.lower() else "INFO"
+                lines.append({
+                    "id": f"litellm-{i}",
+                    "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                    "level": lvl,
+                    "source": "litellm",
+                    "message": line[:240],
+                })
+
+    if scope_q in ("bridge", "all"):
+        # The bridge's own recent log lines (this process) are best-effort;
+        # surface a synthetic status line plus any systemd journal for this unit.
+        unit_journal = safe_run(["journalctl", "-u", "garrettos-bridge", "-n", "20", "--no-pager", "--output=cat"])
+        if unit_journal:
+            for i, line in enumerate(unit_journal.splitlines()[:20]):
+                line = scrub(line)
+                if not line:
+                    continue
+                lvl = "ERROR" if "error" in line.lower() else "WARN" if "warn" in line.lower() else "INFO"
+                lines.append({
+                    "id": f"bridge-{i}",
+                    "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                    "level": lvl,
+                    "source": "bridge",
+                    "message": line[:240],
+                })
+        else:
+            lines.append({
+                "id": "bridge-status",
+                "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                "level": "INFO",
+                "source": "bridge",
+                "message": f"garrettos-bridge up {round(time.time() - STARTED_AT, 1)}s",
+            })
+
+    if scope_q in ("tmux", "all"):
+        # Read-only tmux capture of the most recent pane output is too risky to
+        # generalize; instead surface the session list as log-style lines.
+        tmux_raw = safe_run(["tmux", "ls"])
+        if tmux_raw:
+            for i, line in enumerate(tmux_raw.splitlines()):
+                name = line.split(":")[0].strip()
+                if not name:
+                    continue
+                lines.append({
+                    "id": f"tmux-{i}",
+                    "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                    "level": "INFO",
+                    "source": "tmux",
+                    "message": f"{name}: {line.split(':', 1)[1].strip() if ':' in line else ''}".strip(),
+                })
+
+    # Sort newest-last-ish by id index (already in insertion order); cap at 60.
+    return envelope({"scope": scope_q, "lines": lines[:60]})
 
 
 # ---------------------------------------------------------------------------
@@ -603,15 +749,6 @@ def memory(authorization: str | None = Header(default=None)):
 # ---------------------------------------------------------------------------
 # /integrations — reachability probes
 # ---------------------------------------------------------------------------
-
-def _http_ok(url: str, timeout: float = SUBPROCESS_TIMEOUT) -> bool:
-    import urllib.request
-    try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
 
 
 @app.get("/integrations")

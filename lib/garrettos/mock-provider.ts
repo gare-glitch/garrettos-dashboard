@@ -36,6 +36,7 @@ import type {
   IntegrationsPayload,
   EventsPayload,
   ModelsPayload,
+  LogsPayload,
   AgentSession,
   SystemHealth,
   MemoryEvent,
@@ -130,5 +131,18 @@ export const mockProvider: GarrettOSDataProvider = {
 
   async getModels() {
     return ok<ModelsPayload>({ routes: osModelRoutes, usage: osApiUsage }, 'mock');
+  },
+
+  async getLogs(scope: 'litellm' | 'bridge' | 'tmux' | 'all' = 'bridge') {
+    // Synthetic mock log lines so the ops console renders without the bridge.
+    const lines = [
+      { id: 'm1', time: '14:24:02', level: 'INFO' as const, source: 'litellm', message: 'Routed request to claude-sonnet (1.2s)' },
+      { id: 'm2', time: '14:23:58', level: 'INFO' as const, source: 'qdrant', message: 'Indexed 12 new vectors → collection: memory' },
+      { id: 'm3', time: '14:23:41', level: 'WARN' as const, source: 'openclaw', message: 'Approval pending for VPS bridge deploy' },
+      { id: 'm4', time: '14:23:12', level: 'INFO' as const, source: 'ollama', message: 'Loaded llama3.1:8b into VRAM (4.1 GB)' },
+      { id: 'm5', time: '14:22:30', level: 'ERROR' as const, source: 'openclaw', message: 'Webhook timeout from GitHub (retrying)' },
+    ];
+    const filtered = scope === 'all' ? lines : lines.filter((l) => l.source === scope || (scope === 'bridge' && l.source !== 'litellm'));
+    return ok<LogsPayload>({ scope, lines: filtered.length ? filtered : lines }, 'mock');
   },
 };
