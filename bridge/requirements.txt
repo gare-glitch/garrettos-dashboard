@@ -1,0 +1,5 @@
+# GarrettOS Hetzner Bridge dependencies (M8)
+# Pinned to current major versions for reproducible VPS installs.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0

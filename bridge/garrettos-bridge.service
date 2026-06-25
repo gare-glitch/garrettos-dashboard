@@ -1,0 +1,32 @@
+[Unit]
+Description=GarrettOS Read-Only Bridge (Hetzner VPS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/garrettos-bridge
+# venv lives at /root/garrettos-bridge/.venv
+ExecStart=/root/garrettos-bridge/.venv/bin/python /root/garrettos-bridge/garrettos_bridge.py
+Restart=on-failure
+RestartSec=3
+
+# Token MUST be set in /root/garrettos-bridge/.env (loaded via EnvironmentFile).
+EnvironmentFile=/root/garrettos-bridge/.env
+
+# Bind to loopback by default. Set BRIDGE_BIND=0.0.0.0 in .env only behind a
+# reverse proxy / firewall that restricts access to the Vercel egress IPs.
+# BRIDGE_BIND=127.0.0.1
+# BRIDGE_PORT=8788
+
+# Hardening — the bridge never needs write access to the repo or network egress
+# beyond local probes, so lock it down.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/root/garrettos-bridge
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
