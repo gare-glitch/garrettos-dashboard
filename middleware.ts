@@ -9,6 +9,13 @@ export async function middleware(request: NextRequest) {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth/callback');
   const isDashboardRoute = !pathname.startsWith('/api');
+
+  // Read-only GarrettOS provider routes are public: they only return status
+  // data from the bridge using server-side env vars and never expose secrets.
+  // Bypass auth here so the dashboard can fetch them without a session, while
+  // dashboard pages and all other API routes stay protected.
+  if (pathname.startsWith('/api/garrettos/')) return response;
+
   if ((authBypassEnabled && isDashboardRoute) || !url || !anon || isAuthRoute) return response;
 
   const supabase = createServerClient(url, anon, {
