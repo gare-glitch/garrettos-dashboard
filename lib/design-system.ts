@@ -21,6 +21,7 @@ export const typography = {
   headline: 'text-headline-lg font-semibold tracking-tight text-on-surface',
   headlineMd: 'text-headline-md font-semibold text-on-surface',
   body: 'text-body-sm text-on-surface-variant',
+  bodySm: 'text-body-sm text-on-surface',
   bodyLg: 'text-body-lg text-on-surface',
   mono: 'font-mono text-body-code text-on-surface-variant',
   code: 'font-mono text-body-code',

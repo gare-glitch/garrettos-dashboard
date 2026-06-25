@@ -54,7 +54,45 @@ export const osMemory = [
   { id: 'm2', title: 'OpenClaw VPS bridge decision', source: 'OpenClawMemory', timestamp: '5h ago', tags: ['vps', 'security'] },
   { id: 'm3', title: 'Lean bulk protocol', source: 'Obsidian', timestamp: '1d ago', tags: ['health', 'gym'] },
   { id: 'm4', title: 'LiteLLM routing policy', source: 'Obsidian', timestamp: '2d ago', tags: ['ai', 'infra'] },
+  { id: 'm5', title: 'Garmin HRV forecasting notes', source: 'Obsidian', timestamp: '3d ago', tags: ['health', 'timesfm'] },
+  { id: 'm6', title: 'Composio tool routing benchmarks', source: 'OpenClawMemory', timestamp: '4d ago', tags: ['agents', 'composio'] },
 ];
+
+export const osMemoryDecisions = [
+  { id: 'd1', title: 'Adopt LiteLLM as primary router', decided: '2d ago', rationale: 'Cost + latency win over direct provider calls' },
+  { id: 'd2', title: 'Run Ollama locally for <8B models', decided: '4d ago', rationale: 'Eliminates egress for fast drafts' },
+  { id: 'd3', title: 'Qdrant over Weaviate for vector store', decided: '1w ago', rationale: 'Lower memory footprint on VPS' },
+];
+
+export const osMemoryTodos = [
+  { id: 't1', title: 'Wire Supabase RLS for memory chunks', due: 'Today', priority: 'high' as const },
+  { id: 't2', title: 'Export OpenClawMemory to Obsidian', due: 'This week', priority: 'medium' as const },
+  { id: 't3', title: 'Backfill HRV tagging on older chunks', due: 'Next week', priority: 'low' as const },
+];
+
+export const osMemoryActiveProjects = [
+  { id: 'ap1', title: 'GarrettOS Command Center', chunks: 64, updated: '2h ago' },
+  { id: 'ap2', title: 'OpenClaw VPS Bridge', chunks: 38, updated: '5h ago' },
+  { id: 'ap3', title: 'Content Engine v2', chunks: 22, updated: '1d ago' },
+];
+
+export const osNeuralIndex = [
+  { id: 'ni1', title: 'GarrettOS Phase 2 architecture', source: 'Obsidian', timestamp: '2h ago', tags: ['dashboard', 'phase-2'], chunks: 12, relevance: 98 },
+  { id: 'ni2', title: 'OpenClaw VPS bridge decision', source: 'OpenClawMemory', timestamp: '5h ago', tags: ['vps', 'security'], chunks: 8, relevance: 91 },
+  { id: 'ni3', title: 'LiteLLM routing policy', source: 'Obsidian', timestamp: '2d ago', tags: ['ai', 'infra'], chunks: 6, relevance: 84 },
+  { id: 'ni4', title: 'Lean bulk protocol', source: 'Obsidian', timestamp: '1d ago', tags: ['health', 'gym'], chunks: 4, relevance: 72 },
+  { id: 'ni5', title: 'Garmin HRV forecasting notes', source: 'Obsidian', timestamp: '3d ago', tags: ['health', 'timesfm'], chunks: 9, relevance: 68 },
+];
+
+export const osMemoryStats = {
+  totalChunks: 248,
+  newToday: 12,
+  sources: 2,
+  lastSync: '2h ago',
+  decisions: 3,
+  todos: 3,
+  activeProjects: 3,
+};
 
 export const osAgents = {
   nodes: [

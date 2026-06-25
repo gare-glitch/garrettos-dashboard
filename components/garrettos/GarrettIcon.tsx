@@ -66,6 +66,7 @@ export type MaterialSymbol =
   | 'fitness_center'
   | 'water_drop'
   | 'menu'
+  | 'open_in_new'
   | (string & {});
 
 export function GarrettIcon({
