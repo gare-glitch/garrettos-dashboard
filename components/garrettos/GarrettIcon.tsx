@@ -68,6 +68,8 @@ export type MaterialSymbol =
   | 'menu'
   | 'open_in_new'
   | 'storage'
+  | 'table_rows'
+  | 'terminal'
   | (string & {});
 
 export function GarrettIcon({

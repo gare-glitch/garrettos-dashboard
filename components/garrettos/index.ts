@@ -33,6 +33,8 @@ export { ApiKeyCard, ApiKeyGroup, SecurityAlert } from './ApiKeyCard';
 export type { ApiKeyCardProps } from './ApiKeyCard';
 export { LogStream, LogFilterBar, TerminalOverlay } from './LogStream';
 export type { LogEntry, LogLevel } from './LogStream';
+export { ApprovalDialog, AgentFleetTable, AgentDrawer } from './AgentOps';
+export type { Approval, AgentFleetRow, AgentConfig } from './AgentOps';
 export { CommandWorkspace } from './CommandWorkspace';
 export { AppLoadingScreen, SyncingMemoryLoader, LoginLoadingState } from './auth/AppLoadingScreen';
 export { LoginGlassPanel, GarrettOSMark, LoginForm } from './auth/LoginExperience';

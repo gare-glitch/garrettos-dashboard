@@ -255,6 +255,35 @@ export const osTerminalLines = [
   { id: 'tl8', text: '✓ dry-run complete — no changes required', tone: 'secondary' as const },
 ];
 
+export type AgentFleetRow = {
+  id: string;
+  name: string;
+  model: string;
+  status: 'active' | 'idle' | 'error';
+  latency: string;
+  uptime: string;
+};
+
+export const osAgentFleet: AgentFleetRow[] = [
+  { id: 'af1', name: 'Cortex-Prime-01', model: 'LLM-70B-V3', status: 'active', latency: '24ms', uptime: '99.98%' },
+  { id: 'af2', name: 'Synthetix-Node-B', model: 'VISION-TR-4', status: 'idle', latency: '--', uptime: '84.22%' },
+  { id: 'af3', name: 'Logic-Gate-Delta', model: 'QUANTUM-X1', status: 'error', latency: '482ms', uptime: '12.05%' },
+  { id: 'af4', name: 'Deep-Thought-04', model: 'NEURAL-MAP-B', status: 'active', latency: '18ms', uptime: '99.99%' },
+];
+
+export const osTmuxSessions = [
+  { id: 'tm1', name: 'openclaw-bridge', attached: true, command: 'tail -f /var/log/openclaw.log' },
+  { id: 'tm2', name: 'codex-garmin', attached: false, command: 'node parse-garmin.js' },
+  { id: 'tm3', name: 'claude-review', attached: true, command: 'claude --review schema.sql' },
+];
+
+export const osGuardrails = [
+  { id: 'g1', label: 'Privileged deploys require approval', enabled: true },
+  { id: 'g2', label: 'Network egress allowlist enforced', enabled: true },
+  { id: 'g3', label: 'Secrets never serialized to logs', enabled: true },
+  { id: 'g4', label: 'Auto-rollback on healthcheck failure', enabled: false },
+];
+
 export const osSystemContainers = [
   { id: 'c1', name: 'ollama', status: 'running', cpu: 18, mem: 4.1, uptime: '6d 2h' },
   { id: 'c2', name: 'litellm', status: 'running', cpu: 8, mem: 0.6, uptime: '6d 2h' },
