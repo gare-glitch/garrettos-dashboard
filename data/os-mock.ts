@@ -233,6 +233,36 @@ export const osSystemHealth = [
   { label: 'API Token Usage', value: '88%', tone: 'warn' as StatusTone },
 ];
 
+export const osSystemLogs = [
+  { id: 'l1', time: '14:24:02', level: 'INFO' as const, source: 'LiteLLM', message: 'Routed request to claude-sonnet (1.2s)' },
+  { id: 'l2', time: '14:23:58', level: 'INFO' as const, source: 'Qdrant', message: 'Indexed 12 new vectors → collection: memory' },
+  { id: 'l3', time: '14:23:41', level: 'WARN' as const, source: 'OpenClaw', message: 'Approval pending for VPS bridge deploy' },
+  { id: 'l4', time: '14:23:12', level: 'INFO' as const, source: 'Ollama', message: 'Loaded llama3.1:8b into VRAM (4.1 GB)' },
+  { id: 'l5', time: '14:22:55', level: 'DEBUG' as const, source: 'Valkey', message: 'Queue depth: 12 jobs, 2 priority' },
+  { id: 'l6', time: '14:22:30', level: 'ERROR' as const, source: 'OpenClaw', message: 'Webhook timeout from GitHub (retrying)' },
+  { id: 'l7', time: '14:22:01', level: 'INFO' as const, source: 'Composio', message: 'Tool routing benchmark complete (38ms)' },
+  { id: 'l8', time: '14:21:44', level: 'INFO' as const, source: 'VPS', message: 'Qdrant compaction completed (248k vec)' },
+];
+
+export const osTerminalLines = [
+  { id: 'tl1', text: '$ openclaw status', tone: 'outline' as const },
+  { id: 'tl2', text: '→ bridge: connected (vps-bridge-x8a2)', tone: 'secondary' as const },
+  { id: 'tl3', text: '→ agents: 3 active, 2 idle', tone: 'primary' as const },
+  { id: 'tl4', text: '→ memory: 248 chunks indexed', tone: 'tertiary' as const },
+  { id: 'tl5', text: '→ approvals: 3 pending', tone: 'primary' as const },
+  { id: 'tl6', text: '→ last error: webhook timeout (resolved)', tone: 'error' as const },
+  { id: 'tl7', text: '$ deploy --dry-run', tone: 'outline' as const },
+  { id: 'tl8', text: '✓ dry-run complete — no changes required', tone: 'secondary' as const },
+];
+
+export const osSystemContainers = [
+  { id: 'c1', name: 'ollama', status: 'running', cpu: 18, mem: 4.1, uptime: '6d 2h' },
+  { id: 'c2', name: 'litellm', status: 'running', cpu: 8, mem: 0.6, uptime: '6d 2h' },
+  { id: 'c3', name: 'qdrant', status: 'running', cpu: 12, mem: 1.8, uptime: '6d 2h' },
+  { id: 'c4', name: 'valkey', status: 'running', cpu: 3, mem: 0.2, uptime: '6d 2h' },
+  { id: 'c5', name: 'openclaw-bridge', status: 'restart', cpu: 0, mem: 0.1, uptime: '12m' },
+];
+
 export const osWorkspaceStatus = {
   mode: 'Agent Active' as const,
   summary: '3 agents running · 248 memory chunks · VPS healthy',

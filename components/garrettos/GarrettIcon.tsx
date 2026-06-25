@@ -67,6 +67,7 @@ export type MaterialSymbol =
   | 'water_drop'
   | 'menu'
   | 'open_in_new'
+  | 'storage'
   | (string & {});
 
 export function GarrettIcon({

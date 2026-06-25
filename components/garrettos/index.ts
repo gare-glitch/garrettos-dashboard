@@ -31,6 +31,8 @@ export { HomeHero } from './HomeHero';
 export { SettingsShell } from './SettingsShell';
 export { ApiKeyCard, ApiKeyGroup, SecurityAlert } from './ApiKeyCard';
 export type { ApiKeyCardProps } from './ApiKeyCard';
+export { LogStream, LogFilterBar, TerminalOverlay } from './LogStream';
+export type { LogEntry, LogLevel } from './LogStream';
 export { CommandWorkspace } from './CommandWorkspace';
 export { AppLoadingScreen, SyncingMemoryLoader, LoginLoadingState } from './auth/AppLoadingScreen';
 export { LoginGlassPanel, GarrettOSMark, LoginForm } from './auth/LoginExperience';
