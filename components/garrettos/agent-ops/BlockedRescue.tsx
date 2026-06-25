@@ -50,6 +50,9 @@ export function BlockedRescue({
                 </span>
               </div>
               <p className="mt-0.5 font-mono text-[10px] text-outline">{t.agent}</p>
+              {t.tmuxSession ? (
+                <p className="mt-0.5 truncate font-mono text-[9px] text-tertiary/80">tmux: {t.tmuxSession}</p>
+              ) : null}
               <div className="mt-2 rounded-md border border-white/5 bg-surface-container/40 px-3 py-2">
                 <p className="label-caps text-[9px] text-outline">Suggested next action</p>
                 <p className={cn(typography.body, 'mt-0.5 text-[12px]')}>
@@ -60,6 +63,11 @@ export function BlockedRescue({
               </div>
               {t.logPath ? (
                 <p className="mt-1.5 truncate font-mono text-[9px] text-primary/70">log: {t.logPath}</p>
+              ) : null}
+              {t.lastLogTail ? (
+                <pre className="mt-1.5 max-h-24 overflow-y-auto scroll-hide rounded border border-white/5 bg-[#021018]/60 px-2 py-1 font-mono text-[9px] leading-relaxed text-outline">
+                  {t.lastLogTail.split('\n').slice(-8).join('\n')}
+                </pre>
               ) : null}
             </li>
           ))}

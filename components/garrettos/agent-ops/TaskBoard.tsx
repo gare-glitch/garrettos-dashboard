@@ -97,15 +97,48 @@ export function TaskBoard({
                       <button
                         type="button"
                         onClick={() => onSelect?.(t)}
-                        className="w-full rounded-lg border border-white/5 bg-surface-container/30 px-3 py-2.5 text-left transition-colors hover:border-primary/20 hover:bg-primary/5"
+                        className={cn(
+                          'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
+                          status === 'blocked'
+                            ? 'border-primary/25 bg-primary/5 hover:border-primary/40'
+                            : status === 'running'
+                              ? 'border-tertiary/25 bg-tertiary/5 hover:border-tertiary/40'
+                              : 'border-white/5 bg-surface-container/30 hover:border-primary/20 hover:bg-primary/5',
+                        )}
                       >
-                        <p className={cn(typography.bodySm, 'truncate font-medium')}>{t.title}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={cn(typography.bodySm, 'truncate font-medium')}>{t.title}</p>
+                          {t.locked ? (
+                            <span className="flex shrink-0 items-center gap-1 rounded-full border border-tertiary/30 bg-tertiary/10 px-1.5 py-0.5 text-[8px] text-tertiary">
+                              <span className="size-1.5 rounded-full bg-tertiary breathing-pip" aria-hidden />
+                              LOCK
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-0.5 truncate font-mono text-[10px] text-outline">
                           {t.agent} · {t.priority} priority
                         </p>
+                        {t.tmuxSession ? (
+                          <p className="mt-0.5 truncate font-mono text-[9px] text-tertiary/80">
+                            tmux: {t.tmuxSession}
+                          </p>
+                        ) : null}
+                        {t.requiresApproval ? (
+                          <p className="mt-0.5 label-caps text-[9px] text-primary">requires approval</p>
+                        ) : null}
                         {t.updated ? <p className="mt-0.5 font-mono text-[9px] text-outline">updated {t.updated}</p> : null}
                         {t.logPath ? (
                           <p className="mt-0.5 truncate font-mono text-[9px] text-primary/70">log: {t.logPath}</p>
+                        ) : null}
+                        {t.nextAction && (status === 'blocked' || status === 'review') ? (
+                          <p className="mt-1.5 rounded border border-white/5 bg-surface-container/40 px-2 py-1 text-[10px] text-on-surface-variant">
+                            {t.nextAction}
+                          </p>
+                        ) : null}
+                        {t.lastLogTail && (status === 'blocked' || status === 'running') ? (
+                          <pre className="mt-1.5 max-h-20 overflow-y-auto scroll-hide rounded border border-white/5 bg-[#021018]/60 px-2 py-1 font-mono text-[9px] leading-relaxed text-outline">
+                            {t.lastLogTail.split('\n').slice(-6).join('\n')}
+                          </pre>
                         ) : null}
                       </button>
                     </StaggerItem>

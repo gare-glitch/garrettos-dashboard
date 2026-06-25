@@ -91,6 +91,16 @@ export type TaskRun = OsTask & {
   targetRepo?: string;
   /** ISO timestamp the task was created (M10). */
   createdAt?: string;
+  /** tmux session name the daemon launched the agent in (M11). */
+  tmuxSession?: string;
+  /** Last ~20 lines of the agent log, sanitized (M11 bridge). */
+  lastLogTail?: string;
+  /** True if the task currently holds a lock or has a live tmux session (M11). */
+  locked?: boolean;
+  /** ISO timestamp the daemon started the task (M11). */
+  startedAt?: string;
+  /** ISO timestamp the daemon marked the task finished (M11). */
+  completedAt?: string;
 };
 
 /** Allowed agents for task creation. */

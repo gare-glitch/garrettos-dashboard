@@ -1,3 +1,9 @@
 node_modules/
 .next/
 .env*.local
+.vercel
+.env*
+
+# Python
+__pycache__/
+*.pyc

@@ -448,6 +448,20 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
 def tasks(authorization: str | None = Header(default=None)):
     require_token(authorization)
 
+    # Build a set of currently-held lock files + running tmux sessions once.
+    lock_dir = Path(os.environ.get("GARRETTOS_LOCK_DIR", "/tmp/garrettos-locks"))
+    held_locks: set[str] = set()
+    try:
+        for lf in lock_dir.glob("*.lock"):
+            held_locks.add(lf.stem)
+    except Exception:
+        pass
+    tmux_names: set[str] = set()
+    tmux_raw = safe_run(["tmux", "ls"])
+    if tmux_raw:
+        for line in tmux_raw.splitlines():
+            tmux_names.add(line.split(":")[0].strip())
+
     found: list[dict[str, Any]] = []
     for task_dir in TASK_PATHS:
         if not task_dir.exists() or not task_dir.is_dir():
@@ -463,15 +477,37 @@ def tasks(authorization: str | None = Header(default=None)):
                 status = status_raw if status_raw in ("queued", "running", "review", "blocked", "done") else "queued"
                 priority_raw = fm.get("priority", "medium").lower()
                 priority = priority_raw if priority_raw in ("low", "medium", "high") else "medium"
+                task_id = md.stem
+                tmux_session = fm.get("tmux_session", "")
+                log_path = fm.get("log_path", fm.get("log", ""))
+                # Last ~20 lines of the agent log, sanitized (read-only).
+                last_log_tail = ""
+                if log_path:
+                    try:
+                        lp = Path(log_path)
+                        if lp.exists():
+                            tail = "\n".join(lp.read_text(errors="ignore").splitlines()[-20:])
+                            last_log_tail = scrub(tail)[:2000]
+                    except Exception:
+                        last_log_tail = ""
+                # Lock status: locked if a lock file exists OR the tmux session is live.
+                locked = task_id in held_locks or (bool(tmux_session) and tmux_session in tmux_names)
                 found.append({
-                    "id": md.stem,
+                    "id": task_id,
                     "title": fm.get("title", md.stem.replace("-", " ").title()),
                     "status": status,
                     "agent": fm.get("agent", "OpenClaw"),
                     "priority": priority,
                     "updated": fm.get("updated", fm.get("date", "—")),
-                    "log_path": fm.get("log_path", fm.get("log", "")),
+                    "log_path": log_path,
                     "next_action": fm.get("next_action", fm.get("next", "")),
+                    "tmux_session": tmux_session,
+                    "last_log_tail": last_log_tail,
+                    "locked": bool(locked),
+                    "requires_approval": fm.get("requires_approval", "false").lower() == "true",
+                    "created_at": fm.get("created_at", ""),
+                    "started_at": fm.get("started_at", ""),
+                    "completed_at": fm.get("completed_at", ""),
                 })
         except Exception:
             continue

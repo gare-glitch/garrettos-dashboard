@@ -1,0 +1,33 @@
+[Unit]
+Description=GarrettOS Safe Loop Daemon (M11)
+Documentation=file:///root/garrettos-dashboard/GARRETTOS_LOOP.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/garrettos-loop.env
+ExecStart=/root/garrettos-dashboard/venv/bin/python3 /root/garrettos-dashboard/scripts/garrettos_loop_daemon.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=garrettos-loop
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# The daemon needs to write task files + logs under /root, so read-write paths
+# are limited to the vault, the logs dir, and the repo.
+ReadWritePaths=/root/vault /root/secondbrain /root/garrettos-logs /root/garrettos-dashboard /tmp/garrettos-locks
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
