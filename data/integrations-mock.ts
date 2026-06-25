@@ -220,6 +220,27 @@ export const settingsSecurityAlert = {
   message: 'System logs show API keys were exported in plaintext. We recommend rotating all keys.',
 };
 
+/**
+ * Optional live-data bridge envs (M7). Each is safe to leave unset — the app
+ * falls back to mock data. Surfaced in Settings as a readiness list.
+ */
+export type LiveDataEnv = {
+  env: string;
+  label: string;
+  description: string;
+};
+
+export const liveDataEnvs: LiveDataEnv[] = [
+  { env: 'GARRETTOS_DATA_MODE', label: 'Data mode', description: 'mock (default) or server — switches the provider layer' },
+  { env: 'OPENCLAW_VPS_BRIDGE_URL', label: 'OpenClaw VPS bridge URL', description: 'Base URL of the Hetzner bridge daemon (health/agents/tasks/events)' },
+  { env: 'OPENCLAW_VPS_BRIDGE_TOKEN', label: 'OpenClaw VPS bridge token', description: 'Bearer token for the bridge — sent as Authorization header only' },
+  { env: 'GARMIN_IMPORT_URL', label: 'Garmin import URL', description: 'Endpoint that ingests Garmin CSV/JSON exports' },
+  { env: 'OBSIDIAN_MEMORY_API_URL', label: 'Obsidian memory API URL', description: 'Obsidian/OpenClawMemory API base for memory chunks' },
+  { env: 'LITELLM_BASE_URL', label: 'LiteLLM base URL', description: 'LiteLLM gateway base URL for model routing + usage' },
+  { env: 'QDRANT_URL', label: 'Qdrant URL', description: 'Qdrant collection endpoint for vector search' },
+  { env: 'VALKEY_URL', label: 'Valkey URL', description: 'Valkey/Redis connection URL for queues + cache' },
+];
+
 export function hasAllEnv(env: string[]) {
   return env.every((key) => Boolean(process.env[key]));
 }

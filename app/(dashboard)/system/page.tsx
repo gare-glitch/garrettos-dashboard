@@ -19,14 +19,21 @@ import { LogFilterBar, LogStream, TerminalOverlay, type LogLevel, type LogEntry 
 import { ThinkingLoader } from '@/components/garrettos/ThinkingLoader';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/design-system';
-import { osModelRoutes } from '@/data/os-mock';
-import { osSystemContainers, osSystemLogs, osTerminalLines } from '@/data/os-mock';
-import { osTopology } from '@/data/os-mock';
+import { osModelRoutes, osApiUsage, osSystemContainers, osSystemLogs, osTerminalLines, osTopology } from '@/data/os-mock';
 import { vpsMetrics } from '@/data/mock';
+import { useGarrettOSData } from '@/lib/garrettos/use-garrettos-data';
+import type { ModelsPayload } from '@/lib/garrettos/types';
 
 export default function SystemPage() {
   const [activeLevel, setActiveLevel] = useState<LogLevel | 'ALL'>('ALL');
   const [terminalOpen, setTerminalOpen] = useState(false);
+
+  // Model routing matrix is provider-backed; falls back to mock on any failure.
+  const { data: modelsData, source: modelsSource, warning: modelsWarning } = useGarrettOSData<ModelsPayload>(
+    '/api/garrettos/models',
+    () => ({ routes: osModelRoutes, usage: osApiUsage }),
+  );
+  const routes = modelsData?.routes ?? osModelRoutes;
 
   const filteredLogs = useMemo<LogEntry[]>(() => {
     if (activeLevel === 'ALL') return osSystemLogs;
@@ -128,8 +135,21 @@ export default function SystemPage() {
       <ScrollReveal>
         <SectionHeaderCompact
           title="Model routing matrix"
-          meta={<ThinkingLoader label="Live" />}
+          meta={
+            <span className="flex items-center gap-2">
+              <StatusChip
+                label={modelsSource === 'server' ? 'Live' : modelsSource === 'stale' ? 'Stale' : 'Mock'}
+                tone={modelsSource === 'server' ? 'good' : modelsSource === 'stale' ? 'warn' : 'info'}
+                showPip
+                size="inline"
+              />
+              <ThinkingLoader label="Live" />
+            </span>
+          }
         />
+        {modelsWarning ? (
+          <p className={cn(typography.body, 'mt-1 text-[11px] text-primary/80')}>{modelsWarning}</p>
+        ) : null}
         <GlassPanel variant="card" className="mt-2 overflow-hidden">
           <table className="w-full text-body-sm">
             <thead>
@@ -142,7 +162,7 @@ export default function SystemPage() {
               </tr>
             </thead>
             <tbody>
-              {osModelRoutes.map((m) => (
+              {routes.map((m) => (
                 <tr key={m.model} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
                   <td className="px-4 py-3 font-medium">{m.provider}</td>
                   <td className="px-3 py-3 font-mono text-on-surface-variant">{m.model}</td>

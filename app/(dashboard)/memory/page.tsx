@@ -24,23 +24,43 @@ import {
   osMemoryTodos,
   osNeuralIndex,
 } from '@/data/os-mock';
+import { useGarrettOSData } from '@/lib/garrettos/use-garrettos-data';
+import type { MemoryPayload } from '@/lib/garrettos/types';
 
 export default function MemoryPage() {
+  // Provider-backed memory payload (falls back to mock on any failure).
+  const { data: memoryData, source: memorySource, warning: memoryWarning } = useGarrettOSData<MemoryPayload>(
+    '/api/garrettos/memory',
+    () => ({
+      stats: osMemoryStats,
+      events: osNeuralIndex.map((n) => ({ id: n.id, title: n.title, source: n.source, timestamp: n.timestamp, tags: n.tags, chunks: n.chunks, relevance: n.relevance })),
+      decisions: osMemoryDecisions,
+      todos: osMemoryTodos,
+      activeProjects: osMemoryActiveProjects,
+    }),
+  );
+
+  const stats = memoryData?.stats ?? osMemoryStats;
+  const events = memoryData?.events ?? osNeuralIndex;
+  const decisions = memoryData?.decisions ?? osMemoryDecisions;
+  const todos = memoryData?.todos ?? osMemoryTodos;
+  const activeProjects = memoryData?.activeProjects ?? osMemoryActiveProjects;
+
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState(osNeuralIndex[0]?.id ?? '');
+  const [selectedId, setSelectedId] = useState(events[0]?.id ?? '');
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
-    if (!q) return osNeuralIndex;
-    return osNeuralIndex.filter(
+    if (!q) return events;
+    return events.filter(
       (row) =>
         row.title.toLowerCase().includes(q) ||
-        row.tags.some((t) => t.includes(q)) ||
+        (row.tags ?? []).some((t) => t.includes(q)) ||
         row.source.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, events]);
 
-  const selected = osNeuralIndex.find((row) => row.id === selectedId) ?? osNeuralIndex[0];
+  const selected = events.find((row) => row.id === selectedId) ?? events[0];
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -48,16 +68,30 @@ export default function MemoryPage() {
         eyebrow="Memory"
         title="Neural Index"
         description="Obsidian + OpenClawMemory workspace. Indexed chunks, decisions, todos, and active projects."
-        action={<StatusChip label={`${osMemoryStats.totalChunks} chunks`} tone="info" showPip />}
+        action={
+          <span className="flex items-center gap-2">
+            <StatusChip
+              label={memorySource === 'server' ? 'Live' : memorySource === 'stale' ? 'Stale' : 'Mock'}
+              tone={memorySource === 'server' ? 'good' : memorySource === 'stale' ? 'warn' : 'info'}
+              showPip
+              size="inline"
+            />
+            <StatusChip label={`${stats.totalChunks} chunks`} tone="info" showPip />
+          </span>
+        }
       />
+
+      {memoryWarning ? (
+        <p className={cn(typography.body, 'text-[11px] text-primary/80')}>{memoryWarning}</p>
+      ) : null}
 
       <StaggerReveal className="grid grid-cols-2 gap-gutter md:grid-cols-4">
         <StaggerItem>
           <MetricCard
             variant="compact"
             label="Indexed chunks"
-            value={<AnimatedCounter value={osMemoryStats.totalChunks} />}
-            delta={`+${osMemoryStats.newToday} today`}
+            value={<AnimatedCounter value={stats.totalChunks} />}
+            delta={`+${stats.newToday} today`}
             tone="info"
           />
         </StaggerItem>
@@ -65,7 +99,7 @@ export default function MemoryPage() {
           <MetricCard
             variant="compact"
             label="Sources"
-            value={<AnimatedCounter value={osMemoryStats.sources} />}
+            value={<AnimatedCounter value={stats.sources} />}
             footer="Obsidian, OpenClawMemory"
             tone="good"
           />
@@ -74,7 +108,7 @@ export default function MemoryPage() {
           <MetricCard
             variant="compact"
             label="Decisions"
-            value={<AnimatedCounter value={osMemoryStats.decisions} />}
+            value={<AnimatedCounter value={stats.decisions} />}
             tone="info"
           />
         </StaggerItem>
@@ -82,7 +116,7 @@ export default function MemoryPage() {
           <MetricCard
             variant="compact"
             label="Last sync"
-            value={osMemoryStats.lastSync}
+            value={stats.lastSync}
             tone="good"
           />
         </StaggerItem>
@@ -151,7 +185,7 @@ export default function MemoryPage() {
                         </td>
                         <td className="px-3 py-3">
                           <div className="flex flex-wrap gap-1">
-                            {row.tags.map((tag) => (
+                            {(row.tags ?? []).map((tag) => (
                               <span
                                 key={tag}
                                 className="rounded-full border border-white/8 bg-surface-container/40 px-2 py-0.5 font-mono text-[10px] text-on-surface-variant"
@@ -161,8 +195,8 @@ export default function MemoryPage() {
                             ))}
                           </div>
                         </td>
-                        <td className="px-3 py-3 tabular-nums text-on-surface-variant">{row.chunks}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-primary">{row.relevance}%</td>
+                        <td className="px-3 py-3 tabular-nums text-on-surface-variant">{row.chunks ?? '—'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-primary">{row.relevance != null ? `${row.relevance}%` : '—'}</td>
                       </tr>
                     );
                   })}
@@ -181,10 +215,10 @@ export default function MemoryPage() {
                 <div>
                   <p className={typography.labelCaps}>{selected.source}</p>
                   <h3 className={cn(typography.headlineMd, 'mt-1')}>{selected.title}</h3>
-                  <p className="text-[11px] text-outline">{selected.timestamp} • {selected.chunks} chunks • {selected.relevance}% relevant</p>
+                  <p className="text-[11px] text-outline">{selected.timestamp} • {selected.chunks ?? '—'} chunks • {selected.relevance != null ? `${selected.relevance}%` : '—'} relevant</p>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {selected.tags.map((tag) => (
+                  {(selected.tags ?? []).map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary"
@@ -217,14 +251,14 @@ export default function MemoryPage() {
       <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3">
         <ScrollReveal>
           <SectionHeaderCompact title="Memory timeline" />
-          <MemoryTimeline entries={osNeuralIndex} limit={5} className="mt-2" />
+          <MemoryTimeline entries={events} limit={5} className="mt-2" />
         </ScrollReveal>
 
         <ScrollReveal delay={0.05}>
           <SectionHeaderCompact title="Decisions" />
           <GlassPanel variant="card" className="mt-2 p-4">
             <StaggerReveal className="space-y-3">
-              {osMemoryDecisions.map((d) => (
+              {decisions.map((d) => (
                 <StaggerItem key={d.id}>
                   <div className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
                     <p className={cn(typography.bodyLg, 'font-medium')}>{d.title}</p>
@@ -241,7 +275,7 @@ export default function MemoryPage() {
           <SectionHeaderCompact title="Todos" />
           <GlassPanel variant="card" className="mt-2 p-4">
             <StaggerReveal className="space-y-2">
-              {osMemoryTodos.map((todo) => (
+              {todos.map((todo) => (
                 <StaggerItem key={todo.id}>
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-surface-container/30 px-3 py-2.5">
                     <div className="min-w-0">
@@ -264,7 +298,7 @@ export default function MemoryPage() {
       <ScrollReveal>
         <SectionHeaderCompact title="Active projects" />
         <StaggerReveal className="mt-2 grid gap-gutter md:grid-cols-3">
-          {osMemoryActiveProjects.map((p) => (
+          {activeProjects.map((p) => (
             <StaggerItem key={p.id}>
               <GlassPanel variant="card" interactive className="p-4">
                 <p className={cn(typography.bodyLg, 'font-semibold')}>{p.title}</p>

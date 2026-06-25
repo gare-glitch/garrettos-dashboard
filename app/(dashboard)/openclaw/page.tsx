@@ -28,6 +28,8 @@ import {
   osTasks,
   osTmuxSessions,
 } from '@/data/os-mock';
+import { useGarrettOSData } from '@/lib/garrettos/use-garrettos-data';
+import type { AgentsPayload, TasksPayload } from '@/lib/garrettos/types';
 
 type View = 'grid' | 'table';
 
@@ -42,6 +44,28 @@ export default function OpenClawPage() {
     systemPrompt: 'You are a careful autonomous agent operating on the GarrettOS VPS. Prefer minimal blast radius. Never deploy without approval.',
     temperature: 0.2,
   });
+
+  // Provider-backed agent fleet + approvals (falls back to mock on any failure).
+  const { data: agentsData, source: agentsSource } = useGarrettOSData<AgentsPayload>(
+    '/api/garrettos/agents',
+    () => ({
+      sessions: osAgentFleet.map((f) => ({ id: f.id, name: f.name, model: f.model, status: f.status, latency: f.latency, uptime: f.uptime })),
+      fleet: osAgentFleet,
+      graph: { nodes: osAgents.nodes, edges: osAgents.edges },
+      approvals: osApprovals,
+    }),
+  );
+  const fleet = agentsData?.fleet ?? osAgentFleet;
+  const graphNodes = agentsData?.graph.nodes ?? osAgents.nodes;
+  const graphEdges = agentsData?.graph.edges ?? osAgents.edges;
+  const approvals = agentsData?.approvals ?? osApprovals;
+
+  // Provider-backed task queue.
+  const { data: tasksData, source: tasksSource } = useGarrettOSData<TasksPayload>(
+    '/api/garrettos/tasks',
+    () => ({ tasks: osTasks }),
+  );
+  const tasks = tasksData?.tasks ?? osTasks;
 
   function openApproval(a: Approval) {
     setApproval(a);
@@ -102,14 +126,24 @@ export default function OpenClawPage() {
         <ScrollReveal className="lg:col-span-2">
           <SectionHeaderCompact
             title="Agent fleet"
-            meta={<StatusChip label={`${osAgentFleet.filter((a) => a.status === 'active').length}/${osAgentFleet.length} active`} tone="info" size="inline" />}
+            meta={
+              <span className="flex items-center gap-2">
+                <StatusChip label={`${fleet.filter((a) => a.status === 'active').length}/${fleet.length} active`} tone="info" size="inline" />
+                <StatusChip
+                  label={agentsSource === 'server' ? 'Live' : agentsSource === 'stale' ? 'Stale' : 'Mock'}
+                  tone={agentsSource === 'server' ? 'good' : agentsSource === 'stale' ? 'warn' : 'info'}
+                  showPip
+                  size="inline"
+                />
+              </span>
+            }
           />
           <div className="mt-2">
             {view === 'grid' ? (
-              <AgentGraph nodes={osAgents.nodes} edges={osAgents.edges} />
+              <AgentGraph nodes={graphNodes} edges={graphEdges} />
             ) : (
-              <AgentFleetTable rows={osAgentFleet} onConfigure={(id) => {
-                const row = osAgentFleet.find((a) => a.id === id);
+              <AgentFleetTable rows={fleet} onConfigure={(id) => {
+                const row = fleet.find((a) => a.id === id);
                 if (row) openDrawer(row);
               }} />
             )}
@@ -154,11 +188,11 @@ export default function OpenClawPage() {
         <ScrollReveal>
           <SectionHeaderCompact
             title="Pending approvals"
-            meta={<StatusChip label={`${osApprovals.length} queued`} tone="warn" size="inline" />}
+            meta={<StatusChip label={`${approvals.length} queued`} tone="warn" size="inline" />}
           />
           <GlassPanel variant="card" className="mt-2 p-4">
             <StaggerReveal className="space-y-2">
-              {osApprovals.map((a) => (
+              {approvals.map((a) => (
                 <StaggerItem key={a.id}>
                   <button
                     type="button"
@@ -186,8 +220,18 @@ export default function OpenClawPage() {
 
         {/* Task queue */}
         <ScrollReveal delay={0.05}>
-          <SectionHeaderCompact title="Task queue" />
-          <TaskQueue tasks={osTasks} className="mt-2" />
+          <SectionHeaderCompact
+            title="Task queue"
+            meta={
+              <StatusChip
+                label={tasksSource === 'server' ? 'Live' : tasksSource === 'stale' ? 'Stale' : 'Mock'}
+                tone={tasksSource === 'server' ? 'good' : tasksSource === 'stale' ? 'warn' : 'info'}
+                showPip
+                size="inline"
+              />
+            }
+          />
+          <TaskQueue tasks={tasks} className="mt-2" />
         </ScrollReveal>
       </div>
 

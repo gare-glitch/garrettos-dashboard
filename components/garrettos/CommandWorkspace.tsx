@@ -46,6 +46,8 @@ import {
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/design-system';
 import { GarrettIcon } from '@/components/garrettos/GarrettIcon';
+import { useGarrettOSData } from '@/lib/garrettos/use-garrettos-data';
+import type { EventsPayload } from '@/lib/garrettos/types';
 
 const accentBorder = {
   primary: 'border-l-primary',
@@ -55,6 +57,12 @@ const accentBorder = {
 
 export function CommandWorkspace() {
   const { openPalette } = useCommandPaletteContext();
+  // Event stream is provider-backed; falls back to mock on any failure.
+  const { data: eventsData } = useGarrettOSData<EventsPayload>(
+    '/api/garrettos/events',
+    () => ({ events: osEvents }),
+  );
+  const events = eventsData?.events ?? osEvents;
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -349,7 +357,7 @@ export function CommandWorkspace() {
 
         <StaggerItem>
           <SectionHeaderCompact title="Recent Events" />
-          <EventStream events={osEvents} limit={5} className="mt-2" />
+          <EventStream events={events} limit={5} className="mt-2" />
         </StaggerItem>
 
         <StaggerItem>

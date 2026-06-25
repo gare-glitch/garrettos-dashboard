@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import {
   getIntegrationStatus,
   integrationGroups,
+  liveDataEnvs,
   settingsChecklist,
   settingsNavItems,
   settingsSecurityAlert,
@@ -76,39 +77,100 @@ export default function SettingsPage() {
 
 function GeneralSection() {
   return (
-    <ScrollReveal>
+    <div className="space-y-6">
+      <ScrollReveal>
+        <GlassPanel variant="card" className="p-4 md:p-5">
+          <SectionHeaderCompact
+            title="Onboarding checklist"
+            meta={
+              <StatusChip
+                label={`${settingsChecklist.filter((c) => c.done).length}/${settingsChecklist.length}`}
+                tone="info"
+                size="inline"
+              />
+            }
+          />
+          <StaggerReveal className="mt-3 grid gap-2 md:grid-cols-2">
+            {settingsChecklist.map((item) => (
+              <StaggerItem key={item.label}>
+                <div
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl border border-white/5 px-3 py-2.5 text-body-sm',
+                    item.done ? 'text-on-surface' : 'text-on-surface-variant',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'grid size-5 shrink-0 place-items-center rounded-full',
+                      item.done ? 'bg-secondary/15 text-secondary' : 'bg-white/5 text-outline',
+                    )}
+                  >
+                    {item.done ? <GarrettIcon name="check" size={12} /> : <GarrettIcon name="more_horiz" size={12} />}
+                  </span>
+                  {item.label}
+                </div>
+              </StaggerItem>
+            ))}
+          </StaggerReveal>
+        </GlassPanel>
+      </ScrollReveal>
+
+      <LiveDataReadinessCard />
+    </div>
+  );
+}
+
+function LiveDataReadinessCard() {
+  const mode = process.env.NEXT_PUBLIC_GARRETTOS_DATA_MODE ?? 'mock';
+  return (
+    <ScrollReveal delay={0.05}>
       <GlassPanel variant="card" className="p-4 md:p-5">
         <SectionHeaderCompact
-          title="Onboarding checklist"
+          title="Live data readiness"
           meta={
             <StatusChip
-              label={`${settingsChecklist.filter((c) => c.done).length}/${settingsChecklist.length}`}
-              tone="info"
+              label={`mode: ${mode}`}
+              tone={mode === 'server' ? 'good' : 'info'}
               size="inline"
+              showPip
             />
           }
         />
+        <p className={cn(typography.body, 'mt-2 max-w-2xl')}>
+          Optional bridge envs that switch GarrettOS panels from mock to live data.
+          All are safe to leave unset — every panel falls back to mock data.
+        </p>
         <StaggerReveal className="mt-3 grid gap-2 md:grid-cols-2">
-          {settingsChecklist.map((item) => (
-            <StaggerItem key={item.label}>
-              <div
-                className={cn(
-                  'flex items-center gap-3 rounded-xl border border-white/5 px-3 py-2.5 text-body-sm',
-                  item.done ? 'text-on-surface' : 'text-on-surface-variant',
-                )}
-              >
-                <span
+          {liveDataEnvs.map((env) => {
+            const set = Boolean(process.env[`NEXT_PUBLIC_${env.env}`]) || Boolean(process.env[env.env]);
+            return (
+              <StaggerItem key={env.env}>
+                <div
                   className={cn(
-                    'grid size-5 shrink-0 place-items-center rounded-full',
-                    item.done ? 'bg-secondary/15 text-secondary' : 'bg-white/5 text-outline',
+                    'flex items-start gap-3 rounded-xl border border-white/5 px-3 py-2.5',
+                    set ? 'text-on-surface' : 'text-on-surface-variant',
                   )}
                 >
-                  {item.done ? <GarrettIcon name="check" size={12} /> : <GarrettIcon name="more_horiz" size={12} />}
-                </span>
-                {item.label}
-              </div>
-            </StaggerItem>
-          ))}
+                  <span
+                    className={cn(
+                      'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full',
+                      set ? 'bg-secondary/15 text-secondary' : 'bg-white/5 text-outline',
+                    )}
+                    aria-hidden
+                  >
+                    {set ? <GarrettIcon name="check" size={12} /> : <GarrettIcon name="more_horiz" size={12} />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-body-sm font-medium">
+                      {env.label}
+                      <span className="ml-2 font-mono text-[10px] text-outline">{env.env}</span>
+                    </p>
+                    <p className="text-[11px] text-on-surface-variant">{env.description}</p>
+                  </div>
+                </div>
+              </StaggerItem>
+            );
+          })}
         </StaggerReveal>
       </GlassPanel>
     </ScrollReveal>
