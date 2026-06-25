@@ -2,14 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { useReducedMotion } from 'framer-motion';
 import { navItems } from '@/data/mock';
 import { osCommands, osRecentCommands } from '@/data/os-mock';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/design-system';
-import { scaleIn, springs } from '@/lib/motion';
 import { GarrettIcon } from './GarrettIcon';
 import { GlassPanel } from './GlassPanel';
+import {
+  CommandPaletteKinetics,
+  FluidGlassPanel,
+  PaletteActiveHighlight,
+  PaletteStaggerItem,
+  PaletteStaggerList,
+} from './motion';
 
 export { CommandPaletteProvider, useCommandPaletteContext, useCommandPalette } from './CommandPaletteContext';
 
@@ -109,111 +115,88 @@ export function CommandPalette({
   }, [query]);
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          initial={reduceMotion ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 p-4 pt-[10vh] backdrop-blur-md"
-          onClick={close}
-          role="presentation"
-        >
-          <motion.div
-            variants={scaleIn}
-            initial={reduceMotion ? false : 'hidden'}
-            animate="visible"
-            exit={reduceMotion ? undefined : 'hidden'}
-            transition={reduceMotion ? { duration: 0 } : springs.palette}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Command palette"
-          >
-            <GlassPanel variant="panel" className="overflow-hidden p-0 glow-ring">
-              <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
-                <GarrettIcon name="search" size={20} className="text-primary" />
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search commands, modules, agents…"
-                  className={cn(
-                    'flex-1 bg-transparent text-body-sm text-on-surface outline-none',
-                    'placeholder:text-outline/60',
-                  )}
-                  aria-label="Search commands"
-                />
-                <kbd className="hidden rounded border border-white/10 bg-surface-container-high/50 px-1.5 py-0.5 font-mono text-[10px] text-outline sm:inline">
-                  esc
-                </kbd>
-              </div>
+    <CommandPaletteKinetics open={open} onClose={close}>
+      <FluidGlassPanel variant="active" interactive={false} rounded="rounded-xl">
+        <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
+          <GarrettIcon name="search" size={20} className="text-primary" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search commands, modules, agents…"
+            className={cn(
+              'flex-1 bg-transparent text-body-sm text-on-surface outline-none',
+              'placeholder:text-outline/60',
+            )}
+            aria-label="Search commands"
+          />
+          <kbd className="hidden rounded border border-white/10 bg-surface-container-high/50 px-1.5 py-0.5 font-mono text-[10px] text-outline sm:inline">
+            esc
+          </kbd>
+        </div>
 
-              <div className="max-h-[min(420px,50vh)] overflow-y-auto scroll-hide p-2">
-                {!query && osRecentCommands.length > 0 ? (
-                  <div className="mb-2 px-2">
-                    <p className={cn(typography.labelCaps, 'mb-2 text-[10px]')}>Recent</p>
-                    <ul className="space-y-0.5">
-                      {osRecentCommands.map((rc) => (
-                        <li
-                          key={rc.id}
-                          className="flex items-center justify-between rounded-lg px-3 py-2 text-body-sm text-on-surface-variant"
+        <div className="max-h-[min(420px,50vh)] overflow-y-auto scroll-hide p-2">
+          {!query && osRecentCommands.length > 0 ? (
+            <div className="mb-2 px-2">
+              <p className={cn(typography.labelCaps, 'mb-2 text-[10px]')}>Recent</p>
+              <PaletteStaggerList>
+                <ul className="space-y-0.5">
+                  {osRecentCommands.map((rc) => (
+                    <PaletteStaggerItem key={rc.id}>
+                      <li className="flex items-center justify-between rounded-lg px-3 py-2 text-body-sm text-on-surface-variant">
+                        <span>{rc.label}</span>
+                        <span className="font-mono text-[10px] text-outline">{rc.timestamp}</span>
+                      </li>
+                    </PaletteStaggerItem>
+                  ))}
+                </ul>
+              </PaletteStaggerList>
+            </div>
+          ) : null}
+
+          {grouped.length === 0 ? (
+            <p className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No results</p>
+          ) : (
+            grouped.map(([group, groupItems]) => (
+              <div key={group} className="mb-2">
+                <p className={cn(typography.labelCaps, 'px-3 py-1.5 text-[10px]')}>{group}</p>
+                <ul role="listbox">
+                  {groupItems.map((item) => {
+                    const idx = flatItems.indexOf(item);
+                    const isActive = idx === activeIndex;
+                    return (
+                      <li key={item.id} role="option" aria-selected={isActive}>
+                        <button
+                          type="button"
+                          onClick={() => runItem(item)}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          className={cn(
+                            'relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                            isActive ? 'text-on-surface' : 'text-on-surface-variant hover:bg-white/5',
+                          )}
                         >
-                          <span>{rc.label}</span>
-                          <span className="font-mono text-[10px] text-outline">{rc.timestamp}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {grouped.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No results</p>
-                ) : (
-                  grouped.map(([group, groupItems]) => (
-                    <div key={group} className="mb-2">
-                      <p className={cn(typography.labelCaps, 'px-3 py-1.5 text-[10px]')}>{group}</p>
-                      <ul role="listbox">
-                        {groupItems.map((item) => {
-                          const idx = flatItems.indexOf(item);
-                          const isActive = idx === activeIndex;
-                          return (
-                            <li key={item.id} role="option" aria-selected={isActive}>
-                              <button
-                                type="button"
-                                onClick={() => runItem(item)}
-                                onMouseEnter={() => setActiveIndex(idx)}
-                                className={cn(
-                                  'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
-                                  isActive ? 'bg-primary/10 text-on-surface' : 'text-on-surface-variant hover:bg-white/5',
-                                )}
-                              >
-                                {item.icon ? (
-                                  <GarrettIcon name={item.icon} size={18} className="text-primary" />
-                                ) : null}
-                                <span className="flex-1 text-body-sm font-medium">{item.label}</span>
-                                <GarrettIcon name="chevron_right" size={16} className="text-outline opacity-50" />
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ))
-                )}
+                          <PaletteActiveHighlight active={isActive} />
+                          {item.icon ? (
+                            <GarrettIcon name={item.icon} size={18} className="relative text-primary" />
+                          ) : null}
+                          <span className="relative flex-1 text-body-sm font-medium">{item.label}</span>
+                          <GarrettIcon name="chevron_right" size={16} className="relative text-outline opacity-50" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
+            ))
+          )}
+        </div>
 
-              <div className="flex items-center justify-between border-t border-white/8 px-4 py-2">
-                <span className="font-mono text-[10px] text-outline">↑↓ navigate · ↵ select · esc close</span>
-                <span className="font-mono text-[10px] text-outline">⌘K</span>
-              </div>
-            </GlassPanel>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+        <div className="flex items-center justify-between border-t border-white/8 px-4 py-2">
+          <span className="font-mono text-[10px] text-outline">↑↓ navigate · ↵ select · esc close</span>
+          <span className="font-mono text-[10px] text-outline">⌘K</span>
+        </div>
+      </FluidGlassPanel>
+    </CommandPaletteKinetics>
   );
 }
 

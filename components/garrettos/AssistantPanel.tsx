@@ -7,6 +7,7 @@ import { osAssistantMessages } from '@/data/os-mock';
 import { GarrettIcon } from './GarrettIcon';
 import { GlassPanel } from './GlassPanel';
 import { CodeLineLoader, ThinkingLoader } from './ThinkingLoader';
+import { AgentThinkingOrb, FluidGlassPanel, MagneticButton } from './motion';
 
 export type AssistantMessage = {
   id: string;
@@ -40,92 +41,105 @@ export function AssistantPanel({
   }
 
   return (
-    <GlassPanel variant="card" className={cn('flex min-h-[420px] flex-col overflow-hidden', className)}>
-      <div className="flex items-center justify-between border-b border-white/5 bg-surface-container/20 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <GarrettIcon name="auto_awesome" size={18} className="text-primary" />
-          <div>
-            <span className={cn(typography.bodyLg, 'font-semibold')}>{title}</span>
-            {subtitle ? <p className="text-[10px] text-outline">{subtitle}</p> : null}
-          </div>
-        </div>
-        {generating ? <ThinkingLoader label="Thinking" /> : null}
-      </div>
-
-      <div className="flex-1 space-y-6 overflow-y-auto scroll-hide p-4 md:p-5" role="log" aria-live="polite">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={cn('flex gap-3', msg.role === 'user' && 'flex-row-reverse')}
-          >
-            <div
-              className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-lg border',
-                msg.role === 'assistant'
-                  ? 'border-primary/20 bg-primary/10'
-                  : 'border-secondary/20 bg-secondary/10',
-              )}
-            >
-              <GarrettIcon
-                name={msg.role === 'assistant' ? 'bolt' : 'person'}
-                size={18}
-                className={msg.role === 'assistant' ? 'text-primary' : 'text-secondary'}
-              />
+    <FluidGlassPanel
+      variant="active"
+      interactive={false}
+      rounded="rounded-xl"
+      className={cn('min-h-[420px]', className)}
+    >
+      <div className="flex min-h-[420px] flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/5 bg-surface-container/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <GarrettIcon name="auto_awesome" size={18} className="text-primary" />
+            <div>
+              <span className={cn(typography.bodyLg, 'font-semibold')}>{title}</span>
+              {subtitle ? <p className="text-[10px] text-outline">{subtitle}</p> : null}
             </div>
-            <div className={cn('max-w-[85%] space-y-1', msg.role === 'user' && 'text-right')}>
-              <p
+          </div>
+          {generating ? <ThinkingLoader label="Thinking" /> : null}
+        </div>
+
+        <div className="flex-1 space-y-6 overflow-y-auto scroll-hide p-4 md:p-5" role="log" aria-live="polite">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={cn('flex gap-3', msg.role === 'user' && 'flex-row-reverse')}
+            >
+              <div
                 className={cn(
-                  'rounded-xl border p-4 text-body-sm',
+                  'flex size-8 shrink-0 items-center justify-center rounded-lg border',
                   msg.role === 'assistant'
-                    ? 'rounded-tl-none border-white/5 bg-surface-container/40 text-on-surface'
-                    : 'rounded-tr-none border-primary/20 bg-primary/10 text-on-surface',
+                    ? 'border-primary/20 bg-primary/10'
+                    : 'border-secondary/20 bg-secondary/10',
                 )}
               >
-                {msg.content}
-              </p>
-              <span className="px-1 font-mono text-[10px] text-outline">{msg.time}</span>
+                <GarrettIcon
+                  name={msg.role === 'assistant' ? 'bolt' : 'person'}
+                  size={18}
+                  className={msg.role === 'assistant' ? 'text-primary' : 'text-secondary'}
+                />
+              </div>
+              <div className={cn('max-w-[85%] space-y-1', msg.role === 'user' && 'text-right')}>
+                <p
+                  className={cn(
+                    'rounded-xl border p-4 text-body-sm',
+                    msg.role === 'assistant'
+                      ? 'rounded-tl-none border-white/5 bg-surface-container/40 text-on-surface'
+                      : 'rounded-tr-none border-primary/20 bg-primary/10 text-on-surface',
+                  )}
+                >
+                  {msg.content}
+                </p>
+                <span className="px-1 font-mono text-[10px] text-outline">{msg.time}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {generating ? (
-          <div className="rounded-xl border border-white/5 bg-surface-container/30 p-4">
-            <p className={cn(typography.labelCaps, 'mb-3 text-[10px]')}>Generating routing update</p>
-            <CodeLineLoader lines={3} />
-          </div>
-        ) : null}
-      </div>
+          {generating ? (
+            <div className="flex flex-col gap-4 rounded-xl border border-white/5 bg-surface-container/30 p-4">
+              <AgentThinkingOrb label="Agent thinking" size={40} />
+              <div>
+                <p className={cn(typography.labelCaps, 'mb-3 text-[10px]')}>Generating routing update</p>
+                <CodeLineLoader lines={3} />
+              </div>
+            </div>
+          ) : null}
+        </div>
 
-      <div className="border-t border-white/5 p-4">
-        <div className="relative">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Instruct Assistant…"
-            rows={2}
-            className={cn(
-              'w-full resize-none rounded-xl border border-white/10 bg-surface-container-lowest/80',
-              'px-4 py-3 pr-14 text-body-sm text-on-surface placeholder:text-outline/50',
-              'focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30',
-            )}
-            aria-label="Message assistant"
-          />
-          <button
-            type="button"
-            onClick={handleSend}
-            className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-lg bg-primary text-on-primary transition-transform hover:scale-105 active:scale-95"
-            aria-label="Send message"
-          >
-            <GarrettIcon name="arrow_upward" size={20} />
-          </button>
+        <div className="border-t border-white/5 p-4">
+          <div className="relative">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Instruct Assistant…"
+              rows={2}
+              className={cn(
+                'w-full resize-none rounded-xl border border-white/10 bg-surface-container-lowest/80',
+                'px-4 py-3 pr-16 text-body-sm text-on-surface placeholder:text-outline/50',
+                'focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30',
+              )}
+              aria-label="Message assistant"
+            />
+            <MagneticButton
+              type="button"
+              onClick={handleSend}
+              variant="primary"
+              strength={0.2}
+              maxDisplacement={3}
+              className="absolute bottom-3 right-3 size-9 !px-0"
+              aria-label="Send message"
+            >
+              <GarrettIcon name="arrow_upward" size={20} />
+            </MagneticButton>
+          </div>
         </div>
       </div>
-    </GlassPanel>
+    </FluidGlassPanel>
   );
 }

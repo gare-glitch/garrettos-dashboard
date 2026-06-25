@@ -546,14 +546,147 @@ const reduce = useReducedMotion();
 - No autoplay video, carousels, or marquees.
 - No customer-facing "marketing" language in the dashboard — it is an operator tool.
 
-## 15. Maintenance
+## 15. Living Motion System
+
+The base motion rules in §7 cover calm reveals and reduced-motion. This section
+extends them with the **living motion layer** added in M6 — the ambient,
+reactive, and tactile behaviors that make GarrettOS feel alive without becoming
+cyberpunk, glitchy, or distracting. All living motion lives in
+`components/garrettos/motion/` and is governed by `MotionProvider`.
+
+### When motion is ALLOWED
+
+- **Ambient:** one subtle radial light following the cursor across the viewport
+  (`AmbientMouseField`), and per-surface mouse-aware highlights on hero/interactive
+  glass (`FluidGlassPanel`, `ReactiveGlassSurface`). One global ambient field, not many.
+- **Living metrics:** numbers count up on reveal (`AnimatedCounter`), and live/active
+  values breathe a faint sand glow (`LiveMetric`, `PulseNumber`). Idle/stale values stay calm.
+- **Tactile interactions:** buttons magnetic-pull toward the cursor a few px
+  (`MagneticButton`), the dock active indicator morphs between items
+  (`MorphingDockIndicator`), the FAB has a soft idle ring (`DockFab`).
+- **Overlays:** command palette opens/closes with blur + scale + opacity
+  (`CommandPaletteKinetics`); recent commands stagger in; the active highlight
+  morphs between rows (`PaletteActiveHighlight`).
+- **Agent/loading states:** `AgentThinkingOrb` (concentric breathing rings),
+  `LoadingConstellation` (drifting dots for syncing), `CodeGenerationStream`
+  (lines stream in with a caret). Use these instead of full-page spinners.
+- **Scroll choreography:** sections reveal via `ScrollReveal` / `StaggerReveal`;
+  lists/timelines/queues use `StaggeredMotionList` so items rise in as a group.
+- **Route transitions:** subtle fade + small y-slide between pages
+  (`RouteTransition`), never layout-breaking.
+
+### When motion is FORBIDDEN
+
+- **No** glitch, scanline-flicker, or CRT effects.
+- **No** neon glow pulsing faster than the 3s breathe tempo.
+- **No** 3D card tilts or mouse-tracked parallax on content (the login panel's
+  mouse-reactive glow is the single scoped exception).
+- **No** scroll-jacking — reveals trigger via `useInView`, never hijack scroll position.
+- **No** full-page spinners — use `AgentThinkingOrb` / `LoadingConstellation` /
+  `CodeGenerationStream` / `ThinkingLoader` inline instead.
+- **No** animating everything at once — stagger, do not waterfall entire long pages.
+- **No** animating `width`/`height` of large containers; animate `transform`/`opacity`.
+- **No** spring overshoot/bounce except the dock magnetic effect (`springs.dock`).
+- **No** re-triggering scroll reveals on scroll-back — `once: true` by default.
+- **No** motion on stale/idle status — calm by default; only live/active breathes.
+- **No** one-off page-level `motion.*` calls when a motion/ component exists.
+
+### React Bits usage rules
+
+React-Bits-style = **self-contained animated components that own their motion**
+and expose props, not animation internals. In this repo these live in `motion/`:
+
+- `AnimatedCounter` — count-up on reveal. Wrap metric numbers in it.
+- `LiveMetric` / `PulseNumber` — living values with breathing glow / ticking.
+- `BreathingPip` — CSS keyframe pulse for live status.
+- `AgentThinkingOrb` / `LoadingConstellation` / `CodeGenerationStream` — ambient loaders.
+- `MagneticButton` — magnetic-pull button.
+- `MorphingDockIndicator` / `DockFab` — dock indicator + FAB.
+
+**Rules:**
+1. Prefer a React-Bits component over hand-rolling `motion.*` in a page.
+2. These components must be reusable and accept props for label/size/tone — never
+   hardcode the surrounding context.
+3. They must internally call `useReducedMotion()` / `useMotionPreferences()` and disable
+   their motion under reduced motion. Do not push that responsibility to the caller.
+4. Do not expose animation internals (variants, transitions) as props; expose behavior
+   (`liveness`, `size`, `label`, `strength`).
+
+### Motion Primitives usage rules
+
+Motion-Primitives-style = **scene-level and layout motion via shared variants** from
+`lib/motion.ts` and `lib/living-motion.ts`:
+
+- `ScrollReveal` / `StaggerReveal` / `StaggerItem` — viewport-triggered reveals.
+- `StaggeredMotionList` — list/grid choreography with direction (`up`/`down`/`left`/`right`/`fade`).
+- `RouteTransition` — page fade/slide on pathname change.
+- `CommandPaletteKinetics` + `PaletteStaggerList`/`PaletteStaggerItem`/`PaletteActiveHighlight` — palette motion.
+- `layoutId` shared-element transitions (nav pill, dock indicator, settings tab, palette highlight).
+- `springs.*` presets and the `paletteStagger` / `routeVariants` / `orbBreath` variants.
+
+**Rules:**
+1. Use variants + presets from `lib/motion.ts` / `lib/living-motion.ts`. If you write
+   `{ type: 'spring', stiffness: ... }` in a page, move it to a presets file.
+2. `layoutId` is the tool for shared-element transitions (active pill sliding between
+   items). Keep layoutIds unique per surface.
+3. Reveal wrappers must use `once: true` by default and `useInView` (not scroll-jacking).
+4. Stagger children 0.04–0.06s; cap total delay so long lists don't waterfall.
+5. Reduced motion must collapse variants to instant — the `motion/` wrappers handle this.
+
+### Reduced-motion behavior (mandatory)
+
+- `MotionProvider` resolves a `mode`: `full` | `reduced` | `minimal`.
+  - `reduced` = OS `prefers-reduced-motion` is on.
+  - `minimal` = user-forced via `localStorage['garrettos-motion'] === 'minimal'`.
+- Under `reduced`: ambient field off, magnetic off, route transitions off, orb/constellation
+  static, counters jump to final value, no stagger movement (opacity-only or instant).
+- Under `minimal`: ambient + magnetic off (calmer), but reveals/counters still animate gently.
+- Every living-motion component reads `useMotionPreferences()` (or `useReducedMotion()`)
+  and disables its non-essential motion. The variant-bearing CSS `.breathing-pip` is also
+  disabled under `prefers-reduced-motion` in `globals.css`.
+- Static variants (active/warning/danger borders, status colors) remain — they are not motion.
+
+### Examples of good GarrettOS motion
+
+- **Home hero metrics** count up when scrolled into view; the active one breathes a sand glow.
+- **Command dock** active pill morphs between items via `layoutId`; icons magnetic-hover;
+  FAB has a soft idle ring.
+- **Command palette** opens with blur+scale, recent commands stagger in, the sand highlight
+  slides between rows as you arrow up/down.
+- **`/memory` neural index** rows stagger in from the bottom; the selected row's sand tint
+  morphs between selections.
+- **`/system` log stream** shows a `LIVE` breathing pip; terminal overlay opens with `scaleIn`
+  and a heartbeat cursor (not a scanline).
+- **`/openclaw` approval dialog** fields stagger in; the agent drawer slides from the right
+  with `springs.soft`.
+- **Login** panel has a mouse-reactive sand glow + the submit button magnetic-pulls; the
+  "entering" loading screen uses `LoadingConstellation`.
+
+### Examples of bad GarrettOS motion
+
+- A card that tilts in 3D toward the cursor — forbidden (only the login glow is scoped).
+- A "live" CPU number that counts up every second — distracting; use `PulseNumber` with a
+  cross-fade, not a full recount.
+- A full-page spinner while agents run — use `AgentThinkingOrb` inline instead.
+- Every section on a long page animating in one giant waterfall — stagger per section,
+  respect viewport, use `once: true`.
+- A neon pulse at 0.5s tempo — stay at the 3s breathe tempo.
+- Hand-written `motion.div` with inline spring config in a page file — extract a component
+  or use a preset.
+- Re-triggering a reveal every time you scroll past it — set `once: true`.
+- Animating a container's `width` on hover — animate `transform`/`opacity` instead.
+
+## 16. Maintenance
 
 - **Source of truth:** Stitch project `12895490246031623746`. If Stitch tokens change,
   update `app/globals.css` `@theme` block + the YAML front matter here together.
 - **Implementation mirrors:** `lib/design-system.ts` (TS token maps), `lib/motion.ts`
-  (motion presets), `lib/nav-config.ts` (nav). Keep these in sync with this file.
+  (motion presets), `lib/living-motion.ts` (living-motion presets), `lib/nav-config.ts`
+  (nav), `components/garrettos/motion/` (M6 living-motion components). Keep these in
+  sync with this file.
 - **When adding a component:** add it to `components/garrettos/index.ts`, document its
-  props and when-to-use in §8, and add a good/bad example if it replaces a common anti-pattern.
+  props and when-to-use in §8, and add a good/bad example if it replaces a common
+  anti-pattern.
 - **When in doubt:** open a Stitch screen for the relevant route and match it. Stitch is
   the visual source of truth; this file is the written contract that makes Stitch legible
   to agents.

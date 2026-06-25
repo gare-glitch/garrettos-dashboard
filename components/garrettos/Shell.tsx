@@ -13,6 +13,7 @@ import {
 } from './CommandPalette';
 import { SideNavBar, SideNavDrawer } from './SideNavBar';
 import { TopAppBar } from './TopAppBar';
+import { AmbientMouseField, MotionProvider, RouteTransition } from './motion';
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { open, openPalette, closePalette, togglePalette } = useCommandPaletteContext();
@@ -33,6 +34,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative min-h-dvh w-full">
+      <AmbientMouseField />
       <TopAppBar
         onCommandOpen={openPalette}
         onMenuOpen={() => setMobileNavOpen(true)}
@@ -64,7 +66,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             </motion.div>
           ) : null}
 
-          {children}
+          <RouteTransition>{children}</RouteTransition>
         </div>
       </motion.main>
 
@@ -76,8 +78,10 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <CommandPaletteProvider>
-      <ShellInner>{children}</ShellInner>
-    </CommandPaletteProvider>
+    <MotionProvider>
+      <CommandPaletteProvider>
+        <ShellInner>{children}</ShellInner>
+      </CommandPaletteProvider>
+    </MotionProvider>
   );
 }

@@ -16,7 +16,9 @@ export { MiniChart } from './MiniChart';
 export { Sparkline, SparklinePath } from './Sparkline';
 export { RevenueChart, RevenueSummary } from './RevenueChart';
 export { SectionHeader, SectionHeaderCompact } from './SectionHeader';
-export { AnimatedCounter, MetricCounter } from './AnimatedCounter';
+// Living-motion upgrades (M6) — re-exported from motion/ so all pages that
+// import these from the barrel get the upgraded, MotionProvider-aware versions.
+export { AnimatedCounter, MetricCounter } from './motion/AnimatedCounter';
 export { GarrettIcon } from './GarrettIcon';
 export type { MaterialSymbol } from './GarrettIcon';
 export { BreathingPip } from './BreathingPip';
@@ -24,7 +26,7 @@ export { TelemetryChip } from './TelemetryChip';
 export { CommandInput } from './CommandInput';
 export { EmptyState } from './EmptyState';
 export { Skeleton, MetricSkeleton, TableSkeleton, CardSkeleton } from './Skeleton';
-export { ScrollReveal, StaggerReveal, StaggerItem } from './ScrollReveal';
+export { ScrollReveal, StaggerReveal, StaggerItem } from './motion/ScrollReveal';
 export { ThinkingLoader, CodeLineLoader } from './ThinkingLoader';
 export { AssistantPanel } from './AssistantPanel';
 export type { AssistantMessage } from './AssistantPanel';
@@ -39,4 +41,27 @@ export type { Approval, AgentFleetRow, AgentConfig } from './AgentOps';
 export { CommandWorkspace } from './CommandWorkspace';
 export { AppLoadingScreen, SyncingMemoryLoader, LoginLoadingState } from './auth/AppLoadingScreen';
 export { LoginGlassPanel, GarrettOSMark, LoginForm } from './auth/LoginExperience';
+// Living motion system (M6)
+export {
+  MotionProvider,
+  useMotionPreferences,
+  AmbientMouseField,
+  RouteTransition,
+  ReactiveGlassSurface,
+  FluidGlassPanel,
+  LiveMetric,
+  PulseNumber,
+  MagneticButton,
+  MorphingDockIndicator,
+  DockFab,
+  CommandPaletteKinetics,
+  PaletteStaggerList,
+  PaletteStaggerItem,
+  PaletteActiveHighlight,
+  AgentThinkingOrb,
+  LoadingConstellation,
+  CodeGenerationStream,
+  StaggeredMotionList,
+  MotionListItem,
+} from './motion';
 export type * from './types';

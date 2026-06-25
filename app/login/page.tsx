@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase';
 import { AppLoadingScreen } from '@/components/garrettos/auth/AppLoadingScreen';
 import { GarrettOSMark, LoginForm, LoginGlassPanel } from '@/components/garrettos/auth/LoginExperience';
+import { AmbientMouseField, MotionProvider } from '@/components/garrettos/motion';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -38,22 +39,25 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[#021018]" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-surface-container-low/40 via-transparent to-[#021018]" aria-hidden />
-      <div className="pointer-events-none absolute -left-32 top-1/4 size-96 rounded-full bg-primary/6 blur-[100px]" aria-hidden />
-      <div className="pointer-events-none absolute -right-24 bottom-1/4 size-80 rounded-full bg-tertiary/5 blur-[90px]" aria-hidden />
+    <MotionProvider>
+      <main className="relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
+        <AmbientMouseField />
+        <div className="pointer-events-none absolute inset-0 bg-[#021018]" aria-hidden />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-surface-container-low/40 via-transparent to-[#021018]" aria-hidden />
+        <div className="pointer-events-none absolute -left-32 top-1/4 size-96 rounded-full bg-primary/6 blur-[100px]" aria-hidden />
+        <div className="pointer-events-none absolute -right-24 bottom-1/4 size-80 rounded-full bg-tertiary/5 blur-[90px]" aria-hidden />
 
-      <LoginGlassPanel>
-        <GarrettOSMark />
-        <LoginForm
-          email={email}
-          onEmailChange={setEmail}
-          onSubmit={signIn}
-          loading={loading}
-          message={message}
-        />
-      </LoginGlassPanel>
-    </main>
+        <LoginGlassPanel>
+          <GarrettOSMark />
+          <LoginForm
+            email={email}
+            onEmailChange={setEmail}
+            onSubmit={signIn}
+            loading={loading}
+            message={message}
+          />
+        </LoginGlassPanel>
+      </main>
+    </MotionProvider>
   );
 }
