@@ -5,7 +5,6 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { spacing } from '@/lib/design-system';
 import { slideUp } from '@/lib/motion';
-import { CommandDock } from './CommandDock';
 import {
   CommandPalette,
   CommandPaletteProvider,
@@ -14,6 +13,8 @@ import {
 import { SideNavBar, SideNavDrawer } from './SideNavBar';
 import { TopAppBar } from './TopAppBar';
 import { AmbientMouseField, MotionProvider, RouteTransition } from './motion';
+import { AppleStyleDock } from './navigation/AppleStyleDock';
+import { VoiceCommandOverlay, VoiceProvider, useVoice } from './speech';
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { open, openPalette, closePalette, togglePalette } = useCommandPaletteContext();
@@ -70,9 +71,25 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         </div>
       </motion.main>
 
-      <CommandDock onCommandOpen={openPalette} />
+      <AppleStyleDock onCommandOpen={openPalette} />
       <CommandPalette open={open} onClose={closePalette} />
+      <VoiceOverlayBridge />
     </div>
+  );
+}
+
+/** Renders the voice overlay from inside the provider tree. */
+function VoiceOverlayBridge() {
+  const { overlayOpen, state, transcript, lastCommand, supported, closeOverlay } = useVoice();
+  return (
+    <VoiceCommandOverlay
+      open={overlayOpen}
+      state={state}
+      transcript={transcript}
+      lastCommand={lastCommand}
+      supported={supported}
+      onClose={closeOverlay}
+    />
   );
 }
 
@@ -80,7 +97,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <MotionProvider>
       <CommandPaletteProvider>
-        <ShellInner>{children}</ShellInner>
+        <VoiceProvider>
+          <ShellInner>{children}</ShellInner>
+        </VoiceProvider>
       </CommandPaletteProvider>
     </MotionProvider>
   );

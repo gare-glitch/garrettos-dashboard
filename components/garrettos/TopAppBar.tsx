@@ -10,6 +10,7 @@ import { CommandInput } from './CommandInput';
 import { GarrettIcon } from './GarrettIcon';
 import { StatusChip } from './StatusChip';
 import { TelemetryChip } from './TelemetryChip';
+import { VoiceCommandButton, useVoice } from './speech';
 
 export function TopAppBar({
   onCommandOpen,
@@ -22,6 +23,7 @@ export function TopAppBar({
 }) {
   const reduceMotion = useReducedMotion();
   const t = osShellTelemetry;
+  const { state, supported, start, stop } = useVoice();
 
   return (
     <header
@@ -89,6 +91,7 @@ export function TopAppBar({
         >
           <GarrettIcon name="search" size={20} />
         </button>
+        <VoiceCommandButton state={state} supported={supported} onStart={start} onStop={stop} />
         <button
           type="button"
           className="flex size-9 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-white/5 hover:text-primary"

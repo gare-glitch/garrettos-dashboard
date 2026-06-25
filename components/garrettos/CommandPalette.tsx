@@ -16,6 +16,7 @@ import {
   PaletteStaggerItem,
   PaletteStaggerList,
 } from './motion';
+import { VoiceCommandButton, VoiceTranscriptPanel, useVoice } from './speech';
 
 export { CommandPaletteProvider, useCommandPaletteContext, useCommandPalette } from './CommandPaletteContext';
 
@@ -38,6 +39,7 @@ export function CommandPalette({
   const [activeIndex, setActiveIndex] = useState(0);
   const router = useRouter();
   const reduceMotion = useReducedMotion();
+  const { state, transcript, lastCommand, supported, start, stop } = useVoice();
 
   const items = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -130,10 +132,17 @@ export function CommandPalette({
             )}
             aria-label="Search commands"
           />
+          <VoiceCommandButton state={state} supported={supported} onStart={start} onStop={stop} size={18} />
           <kbd className="hidden rounded border border-white/10 bg-surface-container-high/50 px-1.5 py-0.5 font-mono text-[10px] text-outline sm:inline">
             esc
           </kbd>
         </div>
+
+        {(state !== 'idle' || transcript || lastCommand) ? (
+          <div className="px-3 pt-3">
+            <VoiceTranscriptPanel state={state} transcript={transcript} lastCommand={lastCommand} supported={supported} />
+          </div>
+        ) : null}
 
         <div className="max-h-[min(420px,50vh)] overflow-y-auto scroll-hide p-2">
           {!query && osRecentCommands.length > 0 ? (

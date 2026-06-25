@@ -40,6 +40,12 @@ export { ApprovalDialog, AgentFleetTable, AgentDrawer } from './AgentOps';
 export type { Approval, AgentFleetRow, AgentConfig } from './AgentOps';
 // Agent Operations Center components (M9)
 export { SessionMonitor, SourceTag, TaskBoard, LogConsole, BlockedRescue, AgentHealthGrid } from './agent-ops';
+// Speech interface (M9A)
+export { SpeechOrb, VoiceStatusChip, VoiceCommandButton, VoiceTranscriptPanel, VoiceCommandOverlay, VoiceProvider, useVoice } from './speech';
+// Premium reactive effects (M9A)
+export { Strands, STRANDS_DEFAULTS, AmbientStrandsBackground, PointerGlow, ReactiveGrid, FocusRingPulse, type StrandsProps } from './effects';
+// Apple-style dock (M9A)
+export { AppleStyleDock, useDockPhysics } from './navigation';
 export { CommandWorkspace } from './CommandWorkspace';
 export { AppLoadingScreen, SyncingMemoryLoader, LoginLoadingState } from './auth/AppLoadingScreen';
 export { LoginGlassPanel, GarrettOSMark, LoginForm } from './auth/LoginExperience';

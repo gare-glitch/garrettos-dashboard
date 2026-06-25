@@ -682,11 +682,137 @@ Motion-Primitives-style = **scene-level and layout motion via shared variants** 
   update `app/globals.css` `@theme` block + the YAML front matter here together.
 - **Implementation mirrors:** `lib/design-system.ts` (TS token maps), `lib/motion.ts`
   (motion presets), `lib/living-motion.ts` (living-motion presets), `lib/nav-config.ts`
-  (nav), `components/garrettos/motion/` (M6 living-motion components). Keep these in
-  sync with this file.
+  (nav), `components/garrettos/motion/` (M6 living-motion components),
+  `components/garrettos/speech/` (M9A speech), `components/garrettos/effects/`
+  (M9A Strands + reactive surfaces), `components/garrettos/navigation/` (M9A dock).
+  Keep these in sync with this file.
 - **When adding a component:** add it to `components/garrettos/index.ts`, document its
   props and when-to-use in §8, and add a good/bad example if it replaces a common
   anti-pattern.
 - **When in doubt:** open a Stitch screen for the relevant route and match it. Stitch is
   the visual source of truth; this file is the written contract that makes Stitch legible
   to agents.
+
+## 17. Speech interface (M9A)
+
+GarrettOS has a speech-ready command layer built on the browser Web Speech API.
+It is **optional and non-intrusive**: no paid API, no mandatory backend, and the
+UI works fully without it.
+
+### Architecture
+
+- `lib/garrettos/speech/types.ts` — typed minimal Web Speech API surface + voice
+  states (`idle` / `listening` / `thinking` / `speaking` / `unsupported` / `error`).
+- `lib/garrettos/speech/use-browser-speech.ts` — SSR-safe hook. Uses native
+  `SpeechRecognition` when available, reports `unsupported` otherwise. Cleans up
+  the recognition instance on unmount. Respects reduced motion.
+- `lib/garrettos/speech/voice-commands.ts` — mock command set (`open memory`,
+  `open system`, `launch agent`, `show tasks`, `ask garrett`, `sync memory`).
+  Forgiving substring matching for noisy recognition.
+- `components/garrettos/speech/` — `SpeechOrb`, `VoiceCommandButton`,
+  `VoiceTranscriptPanel`, `VoiceStatusChip`, `VoiceCommandOverlay`, `VoiceProvider`.
+- `VoiceProvider` owns the single recognizer for the app and routes commands
+  (navigate to a route, or surface an action id). Mount once in the Shell.
+
+### Rules
+
+- Voice is a **shortcut, not a requirement**. Every voice action has a typed
+  equivalent (command palette / dock / route).
+- Never block the UI on speech. `unsupported` is a normal state, not an error.
+- No mutating actions fire from voice. Commands navigate or surface an action;
+  the integrator decides whether to act.
+- The mic button lives in the TopAppBar and the command palette. A subtle
+  "Talk to GarrettOS" action sits in the home hero. The overlay is dismissible
+  via Escape / outside click.
+- Reduced motion: listening visuals are suppressed; the user is told to type
+  instead. No heavy orb animation under reduced motion.
+
+## 18. Strands + reactive effects (M9A)
+
+### Strands
+
+`components/garrettos/effects/Strands.tsx` is a typed TS port of the React Bits
+"Strands" ambient WebGL visual, backed by `ogl`. It is **ambient, not flashy**.
+
+- OGL is imported dynamically (browser-only, kept out of the SSR bundle).
+- The WebGL context is cleaned up on unmount (renderer destroyed, canvas
+  removed, `WEBGL_lose_context` invoked to free GPU memory).
+- **Reduced motion / minimal mode:** renders a static tri-color gradient
+  fallback instead of WebGL. No `requestAnimationFrame` runs.
+- Pointer-events disabled so it never blocks interaction.
+- **Use only in:** login background, home hero ambient layer, optional command
+  palette background accent. **Never** on every page.
+- GarrettOS default preset: `colors={["#ecbda4","#b9cda4","#b8c8da"]}`,
+  `count=3`, `speed=0.28`, `amplitude=0.65`, `waviness=0.85`, `thickness=0.42`,
+  `glow=1.8`, `taper=3`, `spread=1`, `intensity=0.42`, `saturation=1.05`,
+  `opacity=0.45`, `scale=1.35`, `glass=false`. Prefer `AmbientStrandsBackground`
+  which bakes this preset.
+
+### Reactive surfaces
+
+- `PointerGlow` — soft radial highlight following the cursor. Use on hero cards,
+  metric cards (hero/progress/alert variants), login card. **Not everywhere.**
+- `ReactiveGrid` — subtle dot grid with a cursor mask. Use sparingly behind
+  heroes for quiet depth.
+- `FocusRingPulse` — calm expanding focus ring for keyboard visibility. Use on
+  key interactive elements; falls back to a static ring under reduced motion.
+
+### Rules
+
+- Do not animate everything. Pick 2–3 surfaces per view.
+- Every effect must degrade to a static equivalent under reduced/minimal motion.
+- WebGL effects must clean up their context on unmount. No leaked RAF loops.
+
+## 19. Apple-style dock (M9A)
+
+`components/garrettos/navigation/AppleStyleDock.tsx` + `DockPhysics.tsx` upgrade
+the command dock with cursor-proximity expansion.
+
+### Behavior
+
+- Icons scale up based on cursor proximity (Gaussian falloff, not stepped).
+- The active route keeps a morphing pill indicator (`layoutId` shared across
+  items so it slides between routes).
+- Labels appear on hover/focus above the icon.
+- The plus/FAB still opens the command palette.
+- Keyboard accessible (links with `focus-visible` rings).
+- Mobile stays compact (no proximity expansion; safe-area aware).
+- Uses existing `GarrettIcon` + `navItems` — **never** the sample icons from the
+  React Bits example. The example is a reference for interaction feel only.
+
+### Rules
+
+- Proximity expansion is disabled under reduced/minimal motion; the dock
+  becomes a calm static bar with the active pill still morphing.
+- Do not replace route logic. The dock only navigates and opens the palette.
+- Do not introduce tilt/3D. Expansion is a gentle 2D scale + lift only.
+
+## 20. React Bits / Motion Primitives usage policy (M9A update)
+
+This extends §10 and §15.
+
+- **React Bits style** (self-contained animated components): `Strands`,
+  `SpeechOrb`, `PointerGlow`, `AppleStyleDock`. Each encapsulates its own
+  animation and degrades gracefully. Port to typed TS; do not paste raw JS.
+- **Motion Primitives style** (scene/layout motion): `RouteTransition`,
+  `MorphingDockIndicator`, `StaggerReveal`, palette kinetics. Compose existing
+  Framer Motion primitives; keep them subtle.
+- **When to use which:** encapsulated, reusable interaction → React Bits style.
+  Scene-level choreography (page/dock/palette transitions) → Motion Primitives.
+- **Never** mix WebGL/RAF effects into Motion Primitives, and never put scene
+  transitions inside a React Bits component. Keep the layers separate.
+
+## 21. Performance + reduced-motion rules (M9A update)
+
+- **One recognizer, one WebGL scene per surface.** `VoiceProvider` owns the
+  single SpeechRecognition instance; each Strands surface owns one OGL scene.
+- **Cleanup is mandatory.** Every WebGL effect destroys its renderer + loses
+  the context on unmount. Every RAF loop cancels on unmount. Every speech
+  instance aborts on unmount.
+- **DPR cap:** Strands caps device pixel ratio at 1.75 to protect fill rate.
+- **Reduced motion is non-negotiable.** `prefers-reduced-motion` → no orb
+  breathing, no proximity expansion, no WebGL strands (static gradient), no
+  pointer glow. `MotionProvider` minimal mode does the same.
+- **Don't animate everything.** Pick a few premium surfaces per view. A page
+  with every card glowing is bad GarrettOS UI.
+

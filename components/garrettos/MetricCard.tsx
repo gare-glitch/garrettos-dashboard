@@ -8,6 +8,7 @@ import { slideUp } from '@/lib/motion';
 import { GlassPanel } from './GlassPanel';
 import { StatusChip } from './StatusChip';
 import { FluidGlassPanel } from './motion';
+import { PointerGlow } from './effects';
 import type { StatusTone } from './types';
 
 const metricVariants = cva('', {
@@ -76,30 +77,32 @@ export function MetricCard({
   const useFluid = resolvedVariant === 'hero' || resolvedVariant === 'progress' || resolvedVariant === 'alert';
 
   const surface = useFluid ? (
-    <FluidGlassPanel
-      variant={resolvedVariant === 'alert' ? 'danger' : 'active'}
-      interactive
-      rounded="rounded-xl"
-      className={cn(metricVariants({ variant: resolvedVariant }), className)}
-    >
-      <article aria-label={label}>
-        <MetricCardInner
-          label={label}
-          value={value}
-          delta={delta}
-          tone={tone}
-          icon={icon}
-          resolvedVariant={resolvedVariant}
-          secondaryLabel={secondaryLabel}
-          secondaryValue={secondaryValue}
-          progress={progress}
-          sparkline={sparkline}
-          children={children}
-          footer={footer}
-          reduceMotion={reduceMotion}
-        />
-      </article>
-    </FluidGlassPanel>
+    <PointerGlow radius={220} glowColor="rgba(236, 189, 164, 0.12)">
+      <FluidGlassPanel
+        variant={resolvedVariant === 'alert' ? 'danger' : 'active'}
+        interactive
+        rounded="rounded-xl"
+        className={cn(metricVariants({ variant: resolvedVariant }), className)}
+      >
+        <article aria-label={label}>
+          <MetricCardInner
+            label={label}
+            value={value}
+            delta={delta}
+            tone={tone}
+            icon={icon}
+            resolvedVariant={resolvedVariant}
+            secondaryLabel={secondaryLabel}
+            secondaryValue={secondaryValue}
+            progress={progress}
+            sparkline={sparkline}
+            children={children}
+            footer={footer}
+            reduceMotion={reduceMotion}
+          />
+        </article>
+      </FluidGlassPanel>
+    </PointerGlow>
   ) : (
     <GlassPanel
       variant="card"
