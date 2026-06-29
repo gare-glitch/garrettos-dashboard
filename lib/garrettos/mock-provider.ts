@@ -149,10 +149,15 @@ export const mockProvider: GarrettOSDataProvider = {
         cliMode: true,
         mcpMode: false,
         connectedAccounts: ['github', 'gmail'],
+        connections: [
+          { toolkit: 'github', status: 'ACTIVE' },
+          { toolkit: 'gmail', status: 'ACTIVE' },
+          { toolkit: 'googledrive', status: 'INACTIVE' },
+        ],
         toolkits: ['gmail', 'google_calendar', 'github', 'slack', 'notion'],
         status: 'connected',
         tone: 'good',
-        note: '2 connected app(s) — mock preview',
+        note: '2 connected app(s): github, gmail — mock preview',
       },
     };
     return ok(payload, 'mock');

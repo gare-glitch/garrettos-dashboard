@@ -296,10 +296,19 @@ export type ComposioStatus = {
   /** MCP mode is optional/dev-only. */
   mcpMode: boolean;
   connectedAccounts: string[];
+  /** Richer per-connection objects with only safe fields (toolkit, status, wordId?). */
+  connections?: ComposioConnection[];
   toolkits: string[];
   status: string;
   tone: StatusTone;
   note: string;
+};
+
+/** A single Composio connection — only safe fields are surfaced (M12B bugfix). */
+export type ComposioConnection = {
+  toolkit: string;
+  status: string;
+  wordId?: string;
 };
 
 export type EventsPayload = {

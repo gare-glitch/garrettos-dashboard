@@ -23,6 +23,7 @@ server-provider can consume them directly.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -977,12 +978,30 @@ def memory(authorization: str | None = Header(default=None)):
 COMPOSIO_ALLOWED_TOOLKITS = {"gmail", "google_calendar", "github", "slack", "notion"}
 
 
-def _composio_probe() -> dict[str, Any]:
-    """Best-effort, read-only Composio CLI readiness probe.
+# Fields from a Composio connection object that are NEVER surfaced (may be
+# secrets or account identifiers). Only toolkit name, status, and a safe
+# word_id are exposed.
+_COMPOSIO_REDACT_FIELDS = {
+    "id", "auth_config", "client_id", "client_secret", "access_token",
+    "refresh_token", "api_key", "token", "secret", "password", "username",
+    "email", "scope", "redirect_uri", "expires_at", "created_at", "updated_at",
+    "encrypted_value", "metadata",
+}
 
-    Never exposes tokens. Every output is scrubbed before being surfaced. All
-    commands are hard-coded (no user input) and run with a short timeout. If
-    Composio isn't installed, every field degrades gracefully to "not installed".
+
+def _composio_probe() -> dict[str, Any]:
+    """Best-effort, read-only Composio CLI readiness probe using the current CLI.
+
+    Uses the confirmed-working commands:
+      - `which composio`              (installed?)
+      - `composio whoami`             (authenticated?)
+      - `composio connections list`   (connected accounts — JSON parsed)
+
+    Never exposes account IDs, tokens, or secrets. Only toolkit names, status,
+    and a scrubbed word_id (when present and short) are surfaced. Every CLI
+    output is scrubbed before use. All commands are hard-coded (no user input)
+    with a short timeout. If Composio isn't installed, the probe degrades to
+    "missing".
     """
     probe: dict[str, Any] = {
         "installed": False,
@@ -990,65 +1009,138 @@ def _composio_probe() -> dict[str, Any]:
         "version": "",
         "cli_mode": True,          # CLI is the recommended/supported mode
         "mcp_mode": False,         # MCP is optional/dev-only
-        "connected_accounts": [],
-        "toolkits": [],
-        "status": "not installed",
-        "tone": "warn",
+        "connected_accounts": [],  # toolkit name strings (safe summary)
+        "connections": [],         # richer {toolkit, status, word_id?} objects
+        "toolkits": [],            # distinct toolkit names from connections
+        "status": "missing",
+        "tone": "bad",
         "note": "Composio CLI not detected — install with `pip install composio-core`",
     }
 
-    # 1. Installed?
-    version = safe_run(["composio", "--version"], timeout=4) or safe_run(["composio", "version"], timeout=4)
-    if not version:
-        # Fall back to `which` in case --version isn't a supported subcommand.
-        if safe_run(["which", "composio"]):
-            version = "(unknown version)"
-        else:
-            return probe
+    # 1. Installed? (`which composio` is the reliable check — `--version` may
+    #    not be a supported subcommand on the current CLI.)
+    which = safe_run(["which", "composio"], timeout=3)
+    if not which:
+        return probe
     probe["installed"] = True
-    probe["version"] = scrub(version)[:80]
+    probe["status"] = "installed"
+    probe["tone"] = "warn"
+    probe["note"] = "Composio CLI installed — run `composio login` to authenticate"
 
-    # 2. Authenticated? (`composio whoami` returns user info when logged in)
-    whoami = safe_run(["composio", "whoami"], timeout=5)
+    # Best-effort version (don't fail if this subcommand isn't supported).
+    version = safe_run(["composio", "--version"], timeout=4) or safe_run(
+        ["composio", "version"], timeout=4
+    )
+    if version:
+        probe["version"] = scrub(version)[:80]
+
+    # 2. Authenticated? (`composio whoami` returns user info when logged in.)
+    whoami = safe_run(["composio", "whoami"], timeout=6)
     probe["authenticated"] = bool(whoami and "error" not in (whoami or "").lower())
     if not probe["authenticated"]:
-        probe["status"] = "not authenticated"
+        probe["status"] = "installed"
         probe["tone"] = "warn"
-        probe["note"] = "Run `composio login` on the VPS to authenticate"
+        probe["note"] = "Composio CLI installed — run `composio login` to authenticate"
         return probe
 
-    # 3. Connected accounts (best-effort, scrubbed, names only).
-    accounts_raw = safe_run(["composio", "apps", "list"], timeout=6) or safe_run(
-        ["composio", "connected-accounts", "list"], timeout=6
-    )
-    accounts: list[str] = []
-    if accounts_raw:
-        for line in scrub(accounts_raw).splitlines():
-            line = line.strip().lower()
-            # Take the first token of each non-empty line as a slug-ish name.
-            if line and not line.startswith(("-", "id", "name", "==")):
-                accounts.append(line.split()[0][:40])
-    probe["connected_accounts"] = accounts[:20]
+    # 3. Connected accounts via `composio connections list` (JSON parsed).
+    #    Try `--json` first for structured output, then fall back to raw.
+    raw = safe_run(["composio", "connections", "list", "--json"], timeout=8)
+    if not raw:
+        raw = safe_run(["composio", "connections", "list"], timeout=8)
+    connections = _parse_composio_connections(raw)
 
-    # 4. Available toolkits (best-effort, capped, names only — safe to surface).
-    toolkits_raw = safe_run(["composio", "toolkits", "list"], timeout=6)
-    toolkits: list[str] = []
-    if toolkits_raw:
-        for line in scrub(toolkits_raw).splitlines():
-            line = line.strip().lower()
-            if line and not line.startswith(("-", "id", "name", "==")):
-                toolkits.append(line.split()[0][:40])
-    probe["toolkits"] = toolkits[:40]
+    # Distinct, lowercased toolkit names from active connections.
+    active_toolkits: list[str] = []
+    for c in connections:
+        if c.get("status", "").upper() == "ACTIVE" and c.get("toolkit"):
+            tk = c["toolkit"].lower()
+            if tk not in active_toolkits:
+                active_toolkits.append(tk)
+    probe["connected_accounts"] = active_toolkits[:20]
+    probe["connections"] = connections[:40]
+    probe["toolkits"] = active_toolkits[:40]
 
-    if accounts:
+    if active_toolkits:
         probe["status"] = "connected"
         probe["tone"] = "good"
-        probe["note"] = f"{len(accounts)} connected app(s)"
+        probe["note"] = f"{len(active_toolkits)} connected app(s): {', '.join(active_toolkits[:6])}"
     else:
         probe["status"] = "authenticated"
-        probe["tone"] = "info"
-        probe["note"] = "Authenticated but no connected apps yet"
+        probe["tone"] = "warn"
+        probe["note"] = "Authenticated but no ACTIVE connections — run `composio connections add <toolkit>`"
     return probe
+
+
+def _parse_composio_connections(raw: str | None) -> list[dict[str, Any]]:
+    """Parse `composio connections list` output into safe connection objects.
+
+    Accepts JSON (a list of objects, or an object with an `items`/`connections`
+    list). Falls back to line-based parsing if JSON isn't available. Only
+    exposes `toolkit`, `status`, and a scrubbed `word_id` (when present and
+    short). Never exposes ids, tokens, or auth config.
+    """
+    if not raw:
+        return []
+    scrubbed = scrub(raw)
+    items: list[dict[str, Any]] = []
+
+    # Try JSON first.
+    try:
+        parsed = json.loads(scrubbed)
+    except Exception:
+        parsed = None
+
+    if parsed is not None:
+        if isinstance(parsed, list):
+            items = [i for i in parsed if isinstance(i, dict)]
+        elif isinstance(parsed, dict):
+            # Common wrappers: {"items": [...]} or {"connections": [...]}.
+            for key in ("items", "connections", "data", "results"):
+                val = parsed.get(key)
+                if isinstance(val, list):
+                    items = [i for i in val if isinstance(i, dict)]
+                    break
+            if not items and not any(parsed.get(k) for k in ("items", "connections", "data", "results")):
+                # A single connection object.
+                items = [parsed]
+    else:
+        # Fallback: line-based heuristics. Look for toolkit + status tokens.
+        for line in scrubbed.splitlines():
+            line = line.strip()
+            if not line or line.startswith(("-", "=", "ID", "NAME", "TOOLKIT")):
+                continue
+            low = line.lower()
+            # Heuristic: a line mentioning a known toolkit + a status word.
+            for tk in COMPOSIO_ALLOWED_TOOLKITS | {"googledrive", "linkedin", "instagram", "twitter", "notion", "linear", "serpapi"}:
+                if tk in low:
+                    # Check "inactive" first — "INACTIVE" contains the substring "active".
+                    if "inactive" in low:
+                        status = "INACTIVE"
+                    elif "active" in low:
+                        status = "ACTIVE"
+                    else:
+                        status = "UNKNOWN"
+                    items.append({"toolkit": tk, "status": status})
+                    break
+
+    # Project to safe fields only.
+    safe: list[dict[str, Any]] = []
+    for item in items:
+        toolkit = (
+            str(item.get("toolkit_name") or item.get("toolkit") or item.get("app") or "").strip().lower()
+        )
+        if not toolkit:
+            continue
+        status = str(item.get("status") or item.get("connection_status") or "UNKNOWN").strip().upper()
+        conn: dict[str, Any] = {"toolkit": toolkit[:40], "status": status[:16]}
+        # word_id is safe to surface only if it is a short, non-secret string.
+        word_id = item.get("word_id") or item.get("wordId")
+        if isinstance(word_id, str) and word_id and len(word_id) <= 64:
+            conn["word_id"] = scrub(word_id)[:64]
+        safe.append(conn)
+    return safe
+
 
 
 @app.get("/integrations")

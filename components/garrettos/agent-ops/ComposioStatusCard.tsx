@@ -29,10 +29,15 @@ export function ComposioStatusCard() {
         cliMode: true,
         mcpMode: false,
         connectedAccounts: ['github', 'gmail'],
+        connections: [
+          { toolkit: 'github', status: 'ACTIVE' },
+          { toolkit: 'gmail', status: 'ACTIVE' },
+          { toolkit: 'googledrive', status: 'INACTIVE' },
+        ],
         toolkits: ['gmail', 'google_calendar', 'github', 'slack', 'notion'],
         status: 'connected',
         tone: 'good',
-        note: '2 connected app(s) — mock preview',
+        note: '2 connected app(s): github, gmail — mock preview',
       },
     }),
   );
@@ -77,7 +82,31 @@ function ComposioDetails({ composio, source }: { composio: ComposioStatus; sourc
 
       <div>
         <p className={cn(typography.labelCaps, 'mb-1.5 text-[10px] text-on-surface-variant')}>Connected apps</p>
-        {composio.connectedAccounts.length > 0 ? (
+        {composio.connections && composio.connections.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {composio.connections.map((c) => {
+              const active = c.status.toUpperCase() === 'ACTIVE';
+              return (
+                <span
+                  key={`${c.toolkit}-${c.status}`}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]',
+                    active
+                      ? 'border-secondary/25 bg-secondary/10 text-secondary'
+                      : 'border-white/8 bg-white/[0.02] text-on-surface-variant',
+                  )}
+                >
+                  <span
+                    className={cn('size-1.5 rounded-full', active ? 'bg-secondary' : 'bg-outline/40')}
+                    aria-hidden
+                  />
+                  {c.toolkit}
+                  <span className="font-mono text-[9px] text-outline">{c.status}</span>
+                </span>
+              );
+            })}
+          </div>
+        ) : composio.connectedAccounts.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {composio.connectedAccounts.map((app) => (
               <span
