@@ -309,6 +309,7 @@ export type ComposioConnection = {
   toolkit: string;
   status: string;
   wordId?: string;
+  alias?: string;
 };
 
 export type EventsPayload = {

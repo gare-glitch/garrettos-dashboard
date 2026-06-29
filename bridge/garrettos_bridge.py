@@ -1044,16 +1044,16 @@ def _composio_probe() -> dict[str, Any]:
         return probe
 
     # 3. Connected accounts via `composio connections list` (JSON parsed).
-    #    Try `--json` first for structured output, then fall back to raw.
-    raw = safe_run(["composio", "connections", "list", "--json"], timeout=8)
-    if not raw:
-        raw = safe_run(["composio", "connections", "list"], timeout=8)
+    #    The CLI emits a dict mapping toolkit -> [{status, word_id, ...}].
+    raw = safe_run(["composio", "connections", "list"], timeout=8)
     connections = _parse_composio_connections(raw)
 
-    # Distinct, lowercased toolkit names from active connections.
+    # Distinct, lowercased toolkit names from ACTIVE connections.
     active_toolkits: list[str] = []
+    active_count = 0
     for c in connections:
         if c.get("status", "").upper() == "ACTIVE" and c.get("toolkit"):
+            active_count += 1
             tk = c["toolkit"].lower()
             if tk not in active_toolkits:
                 active_toolkits.append(tk)
@@ -1061,10 +1061,10 @@ def _composio_probe() -> dict[str, Any]:
     probe["connections"] = connections[:40]
     probe["toolkits"] = active_toolkits[:40]
 
-    if active_toolkits:
+    if active_count > 0:
         probe["status"] = "connected"
         probe["tone"] = "good"
-        probe["note"] = f"{len(active_toolkits)} connected app(s): {', '.join(active_toolkits[:6])}"
+        probe["note"] = f"{active_count} ACTIVE connection(s): {', '.join(active_toolkits[:6])}"
     else:
         probe["status"] = "authenticated"
         probe["tone"] = "warn"
@@ -1075,10 +1075,15 @@ def _composio_probe() -> dict[str, Any]:
 def _parse_composio_connections(raw: str | None) -> list[dict[str, Any]]:
     """Parse `composio connections list` output into safe connection objects.
 
-    Accepts JSON (a list of objects, or an object with an `items`/`connections`
-    list). Falls back to line-based parsing if JSON isn't available. Only
-    exposes `toolkit`, `status`, and a scrubbed `word_id` (when present and
-    short). Never exposes ids, tokens, or auth config.
+    The current Composio CLI emits a JSON object mapping toolkit name → array of
+    connection objects, e.g.:
+        {"github": [{"status":"ACTIVE","word_id":"github_x"}], ...}
+    Also accepts a flat JSON list, a wrapper like {"items": [...]}, or a single
+    connection object. Falls back to line-based heuristics for non-JSON output.
+
+    Only exposes `toolkit`, `status`, `word_id`, and `alias` (when present and
+    short). Never exposes ids, tokens, or auth config. EXPIRED connections are
+    included so the UI can show them, but only ACTIVE ones drive the status.
     """
     if not raw:
         return []
@@ -1095,15 +1100,31 @@ def _parse_composio_connections(raw: str | None) -> list[dict[str, Any]]:
         if isinstance(parsed, list):
             items = [i for i in parsed if isinstance(i, dict)]
         elif isinstance(parsed, dict):
-            # Common wrappers: {"items": [...]} or {"connections": [...]}.
+            # Case A: wrapper like {"items": [...]} or {"connections": [...]}.
+            unwrapped = False
             for key in ("items", "connections", "data", "results"):
                 val = parsed.get(key)
                 if isinstance(val, list):
                     items = [i for i in val if isinstance(i, dict)]
+                    unwrapped = True
                     break
-            if not items and not any(parsed.get(k) for k in ("items", "connections", "data", "results")):
-                # A single connection object.
-                items = [parsed]
+            if not unwrapped:
+                # Case B: dict mapping toolkit name → array of connection objects.
+                # This is the actual `composio connections list` format.
+                if any(isinstance(v, list) for v in parsed.values()):
+                    for toolkit_name, conns in parsed.items():
+                        if not isinstance(conns, list):
+                            continue
+                        for c in conns:
+                            if isinstance(c, dict):
+                                # Inject the toolkit name from the dict key.
+                                entry = dict(c)
+                                entry.setdefault("toolkit", toolkit_name)
+                                items.append(entry)
+                else:
+                    # Case C: a single connection object with a toolkit field.
+                    if any(k in parsed for k in ("toolkit", "toolkit_name", "app")):
+                        items = [parsed]
     else:
         # Fallback: line-based heuristics. Look for toolkit + status tokens.
         for line in scrubbed.splitlines():
@@ -1112,11 +1133,11 @@ def _parse_composio_connections(raw: str | None) -> list[dict[str, Any]]:
                 continue
             low = line.lower()
             # Heuristic: a line mentioning a known toolkit + a status word.
-            for tk in COMPOSIO_ALLOWED_TOOLKITS | {"googledrive", "linkedin", "instagram", "twitter", "notion", "linear", "serpapi"}:
+            for tk in COMPOSIO_ALLOWED_TOOLKITS | {"googledrive", "linkedin", "instagram", "twitter", "notion", "linear", "serpapi", "outlook", "canvas"}:
                 if tk in low:
-                    # Check "inactive" first — "INACTIVE" contains the substring "active".
-                    if "inactive" in low:
-                        status = "INACTIVE"
+                    # Check "inactive"/"expired" first — "INACTIVE" contains "active".
+                    if "inactive" in low or "expired" in low:
+                        status = "INACTIVE" if "inactive" in low else "EXPIRED"
                     elif "active" in low:
                         status = "ACTIVE"
                     else:
@@ -1138,6 +1159,10 @@ def _parse_composio_connections(raw: str | None) -> list[dict[str, Any]]:
         word_id = item.get("word_id") or item.get("wordId")
         if isinstance(word_id, str) and word_id and len(word_id) <= 64:
             conn["word_id"] = scrub(word_id)[:64]
+        # alias is safe to surface only if it is a short, non-secret string.
+        alias = item.get("alias") or item.get("label")
+        if isinstance(alias, str) and alias and len(alias) <= 64:
+            conn["alias"] = scrub(alias)[:64]
         safe.append(conn)
     return safe
 
