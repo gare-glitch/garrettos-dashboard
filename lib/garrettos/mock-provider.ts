@@ -203,6 +203,9 @@ export const mockProvider: GarrettOSDataProvider = {
       requiresApproval: input.requiresApproval,
       targetRepo: input.targetRepo?.trim() || undefined,
       composioTools: input.composioTools && input.composioTools.length > 0 ? [...input.composioTools] : undefined,
+      source: input.source,
+      transcript: input.transcript?.trim() || undefined,
+      intent: input.intent?.trim() || undefined,
       createdAt: now,
       updated: now,
     };

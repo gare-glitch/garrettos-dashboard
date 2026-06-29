@@ -109,6 +109,15 @@ export function TaskBoard({
                         <div className="flex items-center justify-between gap-2">
                           <p className={cn(typography.bodySm, 'truncate font-medium')}>{t.title}</p>
                           <div className="flex shrink-0 items-center gap-1">
+                            {t.source === 'voice' ? (
+                              <span
+                                className="flex items-center gap-1 rounded-full border border-tertiary/30 bg-tertiary/10 px-1.5 py-0.5 text-[8px] text-tertiary"
+                                title={t.transcript ? `Voice: "${t.transcript}"` : 'Created by voice'}
+                              >
+                                <GarrettIcon name="mic" size={9} />
+                                VOICE
+                              </span>
+                            ) : null}
                             {t.memoryInjected ? (
                               <span className="flex items-center gap-1 rounded-full border border-secondary/30 bg-secondary/10 px-1.5 py-0.5 text-[8px] text-secondary">
                                 <GarrettIcon name="memory" size={9} />

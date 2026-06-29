@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/design-system';
 import { GarrettIcon } from '../GarrettIcon';
 import { FluidGlassPanel } from '../motion';
 import { SourceTag } from '../agent-ops/SessionMonitor';
+import { useTaskComposer } from './TaskComposerContext';
 import type { TaskAgent, TaskRun } from '@/lib/garrettos/types';
 
 type Priority = 'low' | 'medium' | 'high';
@@ -58,6 +59,7 @@ export function TaskComposer({
   className?: string;
 }) {
   const reduceMotion = useReducedMotion();
+  const { prefill, consumePrefill } = useTaskComposer();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [agent, setAgent] = useState<TaskAgent>('openclaw');
@@ -68,6 +70,22 @@ export function TaskComposer({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<TaskComposerResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<'voice' | 'manual' | undefined>(undefined);
+
+  // Apply a voice "Edit in composer" prefill when the composer opens.
+  useEffect(() => {
+    if (open && prefill) {
+      setTitle(prefill.title ?? '');
+      setDescription(prefill.description ?? '');
+      if (prefill.agent) setAgent(prefill.agent);
+      if (typeof prefill.requiresApproval === 'boolean') setRequiresApproval(prefill.requiresApproval);
+      if (prefill.composioTools) setComposioTools(prefill.composioTools);
+      setSource(prefill.source);
+      setResult(null);
+      setError(null);
+      consumePrefill();
+    }
+  }, [open, prefill, consumePrefill]);
 
   function reset() {
     setTitle('');
@@ -77,6 +95,7 @@ export function TaskComposer({
     setRequiresApproval(true);
     setTargetRepo('');
     setComposioTools([]);
+    setSource(undefined);
     setResult(null);
     setError(null);
   }
@@ -99,6 +118,7 @@ export function TaskComposer({
           requiresApproval,
           targetRepo: targetRepo.trim() || undefined,
           composioTools: composioTools.length > 0 ? composioTools : undefined,
+          source,
         }),
       });
       const json = await res.json();

@@ -85,7 +85,18 @@ export const osTasks = [
     contextSources: ['vault/current_context.md', 'repo/git-status'],
     memoryInjected: true,
   },
-  { id: 't4', title: 'Weekly revenue digest', status: 'queued' as const, agent: 'OpenClaw', priority: 'low' as const },
+  {
+    id: 't4',
+    title: 'Draft email — Professor Smith',
+    status: 'queued' as const,
+    agent: 'OpenCode',
+    priority: 'medium' as const,
+    requiresApproval: true,
+    composioTools: ['gmail'],
+    source: 'voice' as const,
+    transcript: 'Draft an email to Professor Smith asking to meet next week.',
+    intent: 'composio.draft_email',
+  },
 ];
 
 export const osMemory = [

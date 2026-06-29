@@ -18,6 +18,7 @@ import {
 } from './motion';
 import { VoiceCommandButton, VoiceTranscriptPanel, useVoice } from './speech';
 import { useTaskComposer } from './agent-ops/TaskComposerContext';
+import { useCommandPaletteContext } from './CommandPaletteContext';
 
 export { CommandPaletteProvider, useCommandPaletteContext, useCommandPalette } from './CommandPaletteContext';
 
@@ -42,6 +43,15 @@ export function CommandPalette({
   const reduceMotion = useReducedMotion();
   const { state, transcript, lastCommand, supported, start, stop } = useVoice();
   const { openComposer } = useTaskComposer();
+  const { initialQuery, consumeInitialQuery } = useCommandPaletteContext();
+
+  // Seed the query from a voice fallback transcript when the palette opens.
+  useEffect(() => {
+    if (open && initialQuery) {
+      setQuery(initialQuery);
+      consumeInitialQuery();
+    }
+  }, [open, initialQuery, consumeInitialQuery]);
 
   const close = useCallback(() => {
     onClose();

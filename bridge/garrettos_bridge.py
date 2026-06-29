@@ -531,6 +531,9 @@ def tasks(authorization: str | None = Header(default=None)):
                     "memory_injected": fm.get("memory_injected", "false").lower() == "true",
                     "context_preview": context_preview,
                     "composio_tools": composio_tools,
+                    "source": fm.get("source", "") or None,
+                    "transcript": fm.get("transcript", "") or None,
+                    "intent": fm.get("intent", "") or None,
                 })
         except Exception:
             continue
@@ -547,6 +550,9 @@ def tasks(authorization: str | None = Header(default=None)):
 _CREATE_TITLE_MAX = 160
 _CREATE_DESC_MAX = 4000
 _CREATE_REPO_MAX = 240
+_CREATE_TRANSCRIPT_MAX = 1000
+_CREATE_INTENT_MAX = 80
+_CREATE_SOURCES = {"voice", "manual"}
 _CREATE_AGENTS = {"opencode", "claude", "openclaw", "manual"}
 _CREATE_PRIORITIES = {"low", "medium", "high"}
 # Reject shell metacharacters / command separators anywhere in metadata that
@@ -621,9 +627,18 @@ async def create_task(request: Request, authorization: str | None = Header(defau
             if t and t in COMPOSIO_ALLOWED_TOOLKITS and t not in composio_tools:
                 composio_tools.append(t)
 
+    # Voice provenance (M13): source + original transcript + parsed intent id.
+    # All free-text fields are capped and shell-metacharacter-scrubbed below.
+    source = str(body.get("source", "")).strip().lower()
+    if source not in _CREATE_SOURCES:
+        source = ""
+    transcript = str(body.get("transcript", "")).strip()[:_CREATE_TRANSCRIPT_MAX]
+    intent = str(body.get("intent", "")).strip()[:_CREATE_INTENT_MAX]
+
     # Reject shell metacharacters in title/description too — defense in depth
     # so a future execution daemon can never be tricked by stored metadata.
-    if _SHELL_META_RE.search(title) or _SHELL_META_RE.search(description):
+    if _SHELL_META_RE.search(title) or _SHELL_META_RE.search(description) \
+            or _SHELL_META_RE.search(transcript) or _SHELL_META_RE.search(intent):
         return JSONResponse({"detail": "metadata contains disallowed characters"}, status_code=400)
 
     # Build a unique id (slug + UTC timestamp + short counter) so we never
@@ -667,6 +682,12 @@ async def create_task(request: Request, authorization: str | None = Header(defau
         fm_lines.append(f"repo: {target_repo}")
     if composio_tools:
         fm_lines.append(f"composio_tools: {','.join(composio_tools)}")
+    if source:
+        fm_lines.append(f"source: {source}")
+    if transcript:
+        fm_lines.append(f"transcript: {transcript}")
+    if intent:
+        fm_lines.append(f"intent: {intent}")
     fm_lines.append("---")
     fm_lines.append("")
     if description:
@@ -691,6 +712,9 @@ async def create_task(request: Request, authorization: str | None = Header(defau
         "createdAt": created_at,
         "updated": created_at,
         "description": description or None,
+        "source": source or None,
+        "transcript": transcript or None,
+        "intent": intent or None,
     }
     return envelope({"task": task, "source": "server"})
 

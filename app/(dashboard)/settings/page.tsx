@@ -28,6 +28,7 @@ import {
   settingsSecurityAlert,
 } from '@/data/integrations-mock';
 import { ComposioStatusCard } from '@/components/garrettos/agent-ops/ComposioStatusCard';
+import { VoiceSettingsPanel } from '@/components/garrettos/voice';
 
 const sectionTitles: Record<string, string> = {
   general: 'General',
@@ -244,6 +245,7 @@ function IntegrationsSection() {
   return (
     <div className="space-y-6">
       <ComposioStatusCard />
+      <VoiceSettingsPanel />
 
       <ScrollReveal>
         <GlassPanel variant="card" className="p-4 md:p-5">

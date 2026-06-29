@@ -14,7 +14,8 @@ import { SideNavBar, SideNavDrawer } from './SideNavBar';
 import { TopAppBar } from './TopAppBar';
 import { AmbientMouseField, MotionProvider, RouteTransition } from './motion';
 import { AppleStyleDock } from './navigation/AppleStyleDock';
-import { VoiceCommandOverlay, VoiceProvider, useVoice } from './speech';
+import { VoiceProvider } from './speech';
+import { VoiceCommandOverlay, VoiceHotkeyListener } from './voice';
 import { TaskComposer, TaskComposerProvider, useTaskComposer } from './agent-ops';
 
 function ShellInner({ children }: { children: React.ReactNode }) {
@@ -74,24 +75,10 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
       <AppleStyleDock onCommandOpen={openPalette} />
       <CommandPalette open={open} onClose={closePalette} />
-      <VoiceOverlayBridge />
+      <VoiceHotkeyListener />
+      <VoiceCommandOverlay />
       <TaskComposerBridge />
     </div>
-  );
-}
-
-/** Renders the voice overlay from inside the provider tree. */
-function VoiceOverlayBridge() {
-  const { overlayOpen, state, transcript, lastCommand, supported, closeOverlay } = useVoice();
-  return (
-    <VoiceCommandOverlay
-      open={overlayOpen}
-      state={state}
-      transcript={transcript}
-      lastCommand={lastCommand}
-      supported={supported}
-      onClose={closeOverlay}
-    />
   );
 }
 

@@ -8,9 +8,14 @@ export const revalidate = 0;
 const ALLOWED_AGENTS = new Set(['opencode', 'claude', 'openclaw', 'manual']);
 const ALLOWED_PRIORITIES = new Set(['low', 'medium', 'high']);
 const ALLOWED_COMPOSIO_TOOLKITS = new Set(['gmail', 'google_calendar', 'github', 'slack', 'notion']);
+const ALLOWED_SOURCES = new Set(['voice', 'manual']);
 const MAX_TITLE = 160;
 const MAX_DESCRIPTION = 4000;
 const MAX_TARGET_REPO = 240;
+const MAX_TRANSCRIPT = 1000;
+const MAX_INTENT = 80;
+/** Reject shell metacharacters in free-text metadata (defense in depth). */
+const SHELL_META_RE = /[;|&`$<>\\\n\r]/;
 
 /**
  * POST /api/garrettos/tasks/create — create a queued task record only.
@@ -114,6 +119,26 @@ function validateCreateInput(body: unknown): ValidationResult {
     }
   }
 
+  // Voice metadata (M13): provenance + original transcript + parsed intent id.
+  // All free-text fields are capped and shell-metacharacter-scrubbed.
+  let source: 'voice' | 'manual' | undefined;
+  const rawSource = typeof b.source === 'string' ? b.source.trim().toLowerCase() : '';
+  if (rawSource && ALLOWED_SOURCES.has(rawSource)) {
+    source = rawSource as 'voice' | 'manual';
+  }
+
+  let transcript: string | undefined;
+  if (typeof b.transcript === 'string') {
+    const t = b.transcript.trim().slice(0, MAX_TRANSCRIPT);
+    if (t && !SHELL_META_RE.test(t)) transcript = t;
+  }
+
+  let intent: string | undefined;
+  if (typeof b.intent === 'string') {
+    const i = b.intent.trim().slice(0, MAX_INTENT);
+    if (i && !SHELL_META_RE.test(i)) intent = i;
+  }
+
   return {
     ok: true,
     input: {
@@ -124,6 +149,9 @@ function validateCreateInput(body: unknown): ValidationResult {
       requiresApproval,
       targetRepo: targetRepo || undefined,
       composioTools: composioTools.length > 0 ? composioTools : undefined,
+      source,
+      transcript,
+      intent,
     },
   };
 }

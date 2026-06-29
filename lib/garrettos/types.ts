@@ -113,6 +113,12 @@ export type TaskRun = OsTask & {
   memoryInjected?: boolean;
   /** Short sanitized preview of the context bundle (M12 bridge). */
   contextPreview?: string;
+  /** How the task was created — 'voice' for voice-commanded tasks (M13). */
+  source?: 'voice' | 'manual';
+  /** The original voice transcript that produced this task (M13). */
+  transcript?: string;
+  /** The parsed intent id that produced this task, e.g. 'composio.draft_email' (M13). */
+  intent?: string;
 };
 
 /** Allowed agents for task creation. */
@@ -128,6 +134,12 @@ export type TaskCreateInput = {
   targetRepo?: string;
   /** Composio toolkits the agent may use during the run (M12B). */
   composioTools?: string[];
+  /** How the task was created — 'voice' for voice-commanded tasks (M13). */
+  source?: 'voice' | 'manual';
+  /** The original voice transcript that produced this task (M13). */
+  transcript?: string;
+  /** The parsed intent id that produced this task (M13). */
+  intent?: string;
 };
 
 /** Result of creating a task — the persisted TaskRun plus its source. */
