@@ -101,6 +101,16 @@ export type TaskRun = OsTask & {
   startedAt?: string;
   /** ISO timestamp the daemon marked the task finished (M11). */
   completedAt?: string;
+  /** Path to the generated context bundle file (M12). */
+  contextPath?: string;
+  /** Size of the context bundle in bytes (M12). */
+  contextBytes?: number;
+  /** Labels of the memory/project sources injected into the prompt (M12). */
+  contextSources?: string[];
+  /** True if at least one non-task context source was injected (M12). */
+  memoryInjected?: boolean;
+  /** Short sanitized preview of the context bundle (M12 bridge). */
+  contextPreview?: string;
 };
 
 /** Allowed agents for task creation. */

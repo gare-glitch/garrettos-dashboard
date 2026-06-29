@@ -65,10 +65,20 @@ class TaskIssue:
 
 
 @dataclass
+class TaskWarning:
+    """A non-blocking advisory (e.g. missing repo or missing memory sources).
+    Warnings never cause a nonzero exit — they only inform the operator."""
+    path: Path
+    field_name: str
+    message: str
+
+
+@dataclass
 class ValidationReport:
     checked: int = 0
     valid: int = 0
     issues: list[TaskIssue] = field(default_factory=list)
+    warnings: list[TaskWarning] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -76,6 +86,9 @@ class ValidationReport:
 
     def add(self, path: Path, field_name: str, message: str) -> None:
         self.issues.append(TaskIssue(path, field_name, message))
+
+    def warn(self, path: Path, field_name: str, message: str) -> None:
+        self.warnings.append(TaskWarning(path, field_name, message))
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
@@ -170,6 +183,61 @@ def validate_task_file(path: Path) -> list[TaskIssue]:
     return issues
 
 
+def warn_task_file(path: Path) -> list[TaskWarning]:
+    """Non-blocking advisories for a task file. Never affects the exit code.
+
+    - Warns if the task has no `repo` (the agent will launch in the default
+      repo root, which may not be what the operator intended).
+    - Warns if none of the standard memory sources exist on disk (the agent
+      would launch with little/no injected context).
+    """
+    warnings: list[TaskWarning] = []
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return warnings
+    fm, _ = parse_frontmatter(text)
+
+    repo = fm.get("repo", "").strip()
+    if not repo:
+        warnings.append(TaskWarning(path, "repo", "no repo set — agent will run in the default repo root"))
+
+    # Check whether any memory source files exist (best-effort, non-fatal).
+    try:
+        from garrettos_context_builder import (  # local import to avoid a hard cycle
+            VAULT_ROOT,
+            SECONDBRAIN_ROOT,
+            OPENCLAW_ADVANCED_CLAUDE,
+            MEMORY_FILE_NAMES,
+        )
+    except Exception:
+        return warnings  # builder not importable — skip the memory check
+
+    found_memory = False
+    for root in (VAULT_ROOT, SECONDBRAIN_ROOT):
+        for name in MEMORY_FILE_NAMES:
+            try:
+                if (root / name).is_file():
+                    found_memory = True
+                    break
+            except Exception:
+                continue
+        if found_memory:
+            break
+    try:
+        if OPENCLAW_ADVANCED_CLAUDE.is_file():
+            found_memory = True
+    except Exception:
+        pass
+
+    if not found_memory:
+        warnings.append(
+            TaskWarning(path, "memory", "no memory source files found — agent will launch with minimal context")
+        )
+
+    return warnings
+
+
 def collect_task_files(roots: list[Path]) -> list[Path]:
     files: list[Path] = []
     for root in roots:
@@ -200,6 +268,8 @@ def run(roots: list[Path], quiet: bool = False) -> ValidationReport:
             report.valid += 1
             if not quiet:
                 print(f"OK   {path}")
+        # Warnings are collected regardless of validity (non-blocking).
+        report.warnings.extend(warn_task_file(path))
     return report
 
 
@@ -219,7 +289,11 @@ def main(argv: list[str] | None = None) -> int:
     report = run(roots, quiet=args.quiet)
 
     print()
-    print(f"Checked: {report.checked}  Valid: {report.valid}  Issues: {len(report.issues)}")
+    print(f"Checked: {report.checked}  Valid: {report.valid}  Issues: {len(report.issues)}  Warnings: {len(report.warnings)}")
+    if report.warnings:
+        print()
+        for w in report.warnings:
+            print(f"WARN  {w.path}  [{w.field_name}]  {w.message}")
     if report.issues:
         print()
         for issue in report.issues:

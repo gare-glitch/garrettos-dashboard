@@ -108,12 +108,20 @@ export function TaskBoard({
                       >
                         <div className="flex items-center justify-between gap-2">
                           <p className={cn(typography.bodySm, 'truncate font-medium')}>{t.title}</p>
-                          {t.locked ? (
-                            <span className="flex shrink-0 items-center gap-1 rounded-full border border-tertiary/30 bg-tertiary/10 px-1.5 py-0.5 text-[8px] text-tertiary">
-                              <span className="size-1.5 rounded-full bg-tertiary breathing-pip" aria-hidden />
-                              LOCK
-                            </span>
-                          ) : null}
+                          <div className="flex shrink-0 items-center gap-1">
+                            {t.memoryInjected ? (
+                              <span className="flex items-center gap-1 rounded-full border border-secondary/30 bg-secondary/10 px-1.5 py-0.5 text-[8px] text-secondary">
+                                <GarrettIcon name="memory" size={9} />
+                                MEM
+                              </span>
+                            ) : null}
+                            {t.locked ? (
+                              <span className="flex shrink-0 items-center gap-1 rounded-full border border-tertiary/30 bg-tertiary/10 px-1.5 py-0.5 text-[8px] text-tertiary">
+                                <span className="size-1.5 rounded-full bg-tertiary breathing-pip" aria-hidden />
+                                LOCK
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                         <p className="mt-0.5 truncate font-mono text-[10px] text-outline">
                           {t.agent} · {t.priority} priority
@@ -125,6 +133,11 @@ export function TaskBoard({
                         ) : null}
                         {t.requiresApproval ? (
                           <p className="mt-0.5 label-caps text-[9px] text-primary">requires approval</p>
+                        ) : null}
+                        {t.memoryInjected && t.contextSources && t.contextSources.length > 0 ? (
+                          <p className="mt-0.5 truncate font-mono text-[9px] text-secondary/80">
+                            context: {t.contextSources.length} sources · {t.contextBytes ?? 0}b
+                          </p>
                         ) : null}
                         {t.updated ? <p className="mt-0.5 font-mono text-[9px] text-outline">updated {t.updated}</p> : null}
                         {t.logPath ? (
@@ -138,6 +151,11 @@ export function TaskBoard({
                         {t.lastLogTail && (status === 'blocked' || status === 'running') ? (
                           <pre className="mt-1.5 max-h-20 overflow-y-auto scroll-hide rounded border border-white/5 bg-[#021018]/60 px-2 py-1 font-mono text-[9px] leading-relaxed text-outline">
                             {t.lastLogTail.split('\n').slice(-6).join('\n')}
+                          </pre>
+                        ) : null}
+                        {t.contextPreview && (status === 'running' || status === 'review' || status === 'blocked') ? (
+                          <pre className="mt-1.5 max-h-16 overflow-y-auto scroll-hide rounded border border-secondary/15 bg-[#021018]/40 px-2 py-1 font-mono text-[8px] leading-relaxed text-outline">
+                            {t.contextPreview.split('\n').slice(0, 8).join('\n')}
                           </pre>
                         ) : null}
                       </button>

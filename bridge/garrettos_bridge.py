@@ -492,6 +492,19 @@ def tasks(authorization: str | None = Header(default=None)):
                         last_log_tail = ""
                 # Lock status: locked if a lock file exists OR the tmux session is live.
                 locked = task_id in held_locks or (bool(tmux_session) and tmux_session in tmux_names)
+                # M12: context bundle metadata.
+                context_path = fm.get("context_path", "")
+                context_sources_raw = fm.get("context_sources", "")
+                context_sources = [s for s in context_sources_raw.split(",") if s]
+                # A short, sanitized preview of the context bundle (first ~30 lines).
+                context_preview = ""
+                if context_path:
+                    try:
+                        cp = Path(context_path)
+                        if cp.exists():
+                            context_preview = scrub("\n".join(cp.read_text(errors="ignore").splitlines()[:30]))[:1600]
+                    except Exception:
+                        context_preview = ""
                 found.append({
                     "id": task_id,
                     "title": fm.get("title", md.stem.replace("-", " ").title()),
@@ -508,6 +521,11 @@ def tasks(authorization: str | None = Header(default=None)):
                     "created_at": fm.get("created_at", ""),
                     "started_at": fm.get("started_at", ""),
                     "completed_at": fm.get("completed_at", ""),
+                    "context_path": context_path,
+                    "context_bytes": int(fm["context_bytes"]) if fm.get("context_bytes", "").isdigit() else 0,
+                    "context_sources": context_sources,
+                    "memory_injected": fm.get("memory_injected", "false").lower() == "true",
+                    "context_preview": context_preview,
                 })
         except Exception:
             continue

@@ -67,6 +67,11 @@ from garrettos_task_validate import (  # noqa: E402
     parse_frontmatter,
     validate_task_file,
 )
+from garrettos_context_builder import (  # noqa: E402
+    build_context,
+    combined_prompt,
+    ContextBundle,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +165,8 @@ def rewrite_frontmatter(path: Path, updates: dict[str, str]) -> bool:
     preferred = [
         "id", "title", "status", "agent", "priority", "requires_approval",
         "repo", "created_at", "started_at", "completed_at",
-        "tmux_session", "log_path", "next_action",
+        "tmux_session", "log_path", "context_path", "context_bytes",
+        "context_sources", "memory_injected", "next_action",
     ]
     lines = ["---"]
     for key in preferred:
@@ -268,21 +274,22 @@ def _tmux_has_session(session: str) -> bool:
 def spawn_tmux_agent(
     session: str,
     agent_argv: list[str],
-    body: str,
+    prompt: str,
     log_file: Path,
     repo: str | None,
 ) -> bool:
-    """Spawn a detached tmux session that runs the agent with the body piped to
-    its stdin, teeing output to a log file. Returns True on success.
+    """Spawn a detached tmux session that runs the agent with the combined prompt
+    piped to its stdin, teeing output to a log file. Returns True on success.
 
-    The body is passed via a temporary prompt file (NEVER as a shell argument)
-    and fed to the agent through shell redirection `< file`. The agent command
-    itself is from the allow-list and is NOT user-controlled.
+    The prompt (memory context + task body + execution rules) is passed via a
+    prompt file (NEVER as a shell argument) and fed to the agent through shell
+    redirection `< file`. The agent command itself is from the allow-list and is
+    NOT user-controlled. The task body inside the prompt is input text only.
     """
     log_file.parent.mkdir(parents=True, exist_ok=True)
     prompt_file = log_file.with_suffix(".prompt")
     try:
-        prompt_file.write_text(body, encoding="utf-8")
+        prompt_file.write_text(prompt, encoding="utf-8")
     except Exception:
         return False
 
@@ -391,20 +398,55 @@ def process_task(path: Path) -> None:
 
     session = slugify_session(task_id)
     log_file = LOG_DIR / f"{task_id}.log"
+    context_file = LOG_DIR / f"{task_id}.context.md"
+    repo = fm.get("repo") or None
+
+    # M12: build the memory context bundle before launching.
+    bundle = build_context(task_path=path, repo=repo, dry_run=DRY_RUN)
+    source_labels = [s.label for s in bundle.sources if s.kind != "task"]
+    memory_injected = "true" if bundle.memory_injected else "false"
+    context_sources = ",".join(source_labels)
 
     if DRY_RUN:
-        log(f"DRY-RUN would start {task_id}: tmux -s {session} agent={agent_argv} log={log_file}")
+        log(
+            f"DRY-RUN would start {task_id}: tmux -s {session} agent={agent_argv} "
+            f"log={log_file} context={len(bundle.sources)} sources "
+            f"({context_sources or 'none'}) {bundle.bytes_total}b"
+        )
+        if bundle.sources:
+            for s in bundle.sources:
+                flag = " [truncated]" if s.truncated else ""
+                log(f"        + {s.label:28s} {s.bytes_out:>6d}b{flag}")
         release_lock(task_id)
         return
+
+    # Write the context bundle to disk for inspection + bridge surfacing.
+    try:
+        context_file.parent.mkdir(parents=True, exist_ok=True)
+        context_file.write_text(bundle.text, encoding="utf-8")
+    except Exception:
+        log(f"WARN  {task_id} — could not write context file {context_file}")
+
+    # Compose the final prompt: context + task body + execution rules.
+    prompt = combined_prompt(bundle, body)
 
     # Mark running + record metadata BEFORE spawning.
     rewrite_frontmatter(
         path,
-        {"status": "running", "started_at": now_iso(), "tmux_session": session, "log_path": str(log_file)},
+        {
+            "status": "running",
+            "started_at": now_iso(),
+            "tmux_session": session,
+            "log_path": str(log_file),
+            "context_path": str(context_file),
+            "context_bytes": str(bundle.bytes_total),
+            "context_sources": context_sources,
+            "memory_injected": memory_injected,
+        },
     )
-    log(f"START {task_id} -> tmux {session}")
+    log(f"START {task_id} -> tmux {session}  context={len(bundle.sources)} sources memory={memory_injected}")
 
-    ok = spawn_tmux_agent(session, agent_argv, body, log_file, fm.get("repo"))
+    ok = spawn_tmux_agent(session, agent_argv, prompt, log_file, repo)
     if not ok:
         log(f"FAIL  {task_id} — could not spawn tmux session {session}")
         rewrite_frontmatter(path, {"status": "blocked", "next_action": "tmux spawn failed — check tmux service and disk space"})
