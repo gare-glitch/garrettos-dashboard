@@ -29,6 +29,7 @@ import {
 } from '@/data/integrations-mock';
 import { ComposioStatusCard } from '@/components/garrettos/agent-ops/ComposioStatusCard';
 import { VoiceSettingsPanel } from '@/components/garrettos/voice';
+import { OrchestratorAuditPanel } from '@/components/garrettos/orchestrator';
 
 const sectionTitles: Record<string, string> = {
   general: 'General',
@@ -246,6 +247,7 @@ function IntegrationsSection() {
     <div className="space-y-6">
       <ComposioStatusCard />
       <VoiceSettingsPanel />
+      <OrchestratorAuditPanel />
 
       <ScrollReveal>
         <GlassPanel variant="card" className="p-4 md:p-5">

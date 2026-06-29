@@ -19,6 +19,7 @@ import {
 import { VoiceCommandButton, VoiceTranscriptPanel, useVoice } from './speech';
 import { useTaskComposer } from './agent-ops/TaskComposerContext';
 import { useCommandPaletteContext } from './CommandPaletteContext';
+import { useOrchestrator } from './orchestrator/OrchestratorProvider';
 
 export { CommandPaletteProvider, useCommandPaletteContext, useCommandPalette } from './CommandPaletteContext';
 
@@ -42,8 +43,9 @@ export function CommandPalette({
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const { state, transcript, lastCommand, supported, start, stop } = useVoice();
-  const { openComposer } = useTaskComposer();
+  const { openComposer, openComposerWithPrefill } = useTaskComposer();
   const { initialQuery, consumeInitialQuery } = useCommandPaletteContext();
+  const { orchestrate, buildRequest } = useOrchestrator();
 
   // Seed the query from a voice fallback transcript when the palette opens.
   useEffect(() => {
@@ -71,6 +73,33 @@ export function CommandPalette({
     close();
     openComposer();
   }, [close, openComposer]);
+
+  // Run a free-text query through the central orchestrator (source: command_palette).
+  // Navigation/completed → already handled (route pushed). needs_approval → open the
+  // Task Composer prefilled so the user can review before submitting.
+  const runAsCommand = useCallback(
+    async (text: string) => {
+      const q = text.trim();
+      if (!q) return;
+      const req = buildRequest({ source: 'command_palette', transcript: q, userConfirmed: false });
+      const outcome = await orchestrate(req).catch(() => null);
+      close();
+      if (!outcome) return;
+      const r = outcome.result;
+      if (r.status === 'needs_approval' && r.pendingIntent) {
+        const p = r.pendingIntent.payload as Record<string, unknown>;
+        openComposerWithPrefill({
+          title: (p.taskTitle as string | undefined) ?? q,
+          description: (p.taskDescription as string | undefined) ?? q,
+          agent: r.pendingIntent.suggestedAgent,
+          requiresApproval: r.pendingIntent.requiresApproval,
+          composioTools: r.pendingIntent.composioTools,
+          source: 'manual',
+        });
+      }
+    },
+    [buildRequest, orchestrate, openComposerWithPrefill, close],
+  );
 
   const items = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -120,9 +149,13 @@ export function CommandPalette({
         e.preventDefault();
         setActiveIndex((i) => Math.max(i - 1, 0));
       }
-      if (e.key === 'Enter' && flatItems[activeIndex]) {
+      if (e.key === 'Enter') {
         e.preventDefault();
-        runItem(flatItems[activeIndex]);
+        if (flatItems[activeIndex]) {
+          runItem(flatItems[activeIndex]);
+        } else if (query.trim()) {
+          void runAsCommand(query);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -190,7 +223,30 @@ export function CommandPalette({
           ) : null}
 
           {grouped.length === 0 ? (
-            <p className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No results</p>
+            query.trim() ? (
+              <div className="px-2">
+                <p className={cn(typography.labelCaps, 'px-3 py-1.5 text-[10px]')}>Orchestrator</p>
+                <ul role="listbox">
+                  <li role="option" aria-selected={activeIndex === 0}>
+                    <button
+                      type="button"
+                      onClick={() => void runAsCommand(query)}
+                      onMouseEnter={() => setActiveIndex(0)}
+                      className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-on-surface transition-colors hover:bg-white/5"
+                    >
+                      <PaletteActiveHighlight active={activeIndex === 0} />
+                      <GarrettIcon name="bolt" size={18} className="relative text-primary" />
+                      <span className="relative flex-1 text-body-sm font-medium">
+                        Run as command: <span className="text-on-surface-variant">&ldquo;{query.trim()}&rdquo;</span>
+                      </span>
+                      <GarrettIcon name="chevron_right" size={16} className="relative text-outline opacity-50" />
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            ) : (
+              <p className="px-4 py-8 text-center text-body-sm text-on-surface-variant">No results</p>
+            )
           ) : (
             grouped.map(([group, groupItems]) => (
               <div key={group} className="mb-2">

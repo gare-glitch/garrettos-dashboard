@@ -17,6 +17,7 @@ import { AppleStyleDock } from './navigation/AppleStyleDock';
 import { VoiceProvider } from './speech';
 import { VoiceCommandOverlay, VoiceHotkeyListener } from './voice';
 import { TaskComposer, TaskComposerProvider, useTaskComposer } from './agent-ops';
+import { OrchestratorProvider } from './orchestrator';
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { open, openPalette, closePalette, togglePalette } = useCommandPaletteContext();
@@ -93,9 +94,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <MotionProvider>
       <CommandPaletteProvider>
         <TaskComposerProvider>
-          <VoiceProvider>
-            <ShellInner>{children}</ShellInner>
-          </VoiceProvider>
+          <OrchestratorProvider>
+            <VoiceProvider>
+              <ShellInner>{children}</ShellInner>
+            </VoiceProvider>
+          </OrchestratorProvider>
         </TaskComposerProvider>
       </CommandPaletteProvider>
     </MotionProvider>

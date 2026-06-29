@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useVoiceRecognition } from '@/lib/garrettos/voice/useVoiceRecognition';
+import { useOrchestrator } from '../orchestrator/OrchestratorProvider';
 import { useTaskComposer } from '../agent-ops/TaskComposerContext';
 import { useCommandPaletteContext } from '../CommandPaletteContext';
 import type { VoiceMatchResult, VoiceState } from '@/lib/garrettos/speech/types';
@@ -12,7 +13,6 @@ import type {
   VoicePhase,
   VoiceTaskResult,
 } from '@/lib/garrettos/voice/voice-types';
-import type { TaskCreateInput } from '@/lib/garrettos/types';
 
 type VoiceContextValue = {
   // --- M9A legacy (kept for TopAppBar / CommandPalette / HomeHero) ---
@@ -27,7 +27,7 @@ type VoiceContextValue = {
   reset: () => void;
   openOverlay: () => void;
   closeOverlay: () => void;
-  // --- M13 voice command layer ---
+  // --- M13/M14A voice command layer ---
   phase: VoicePhase;
   interim: string;
   finalTranscript: string;
@@ -50,46 +50,29 @@ type VoiceContextValue = {
 const VoiceContext = createContext<VoiceContextValue | null>(null);
 
 /**
- * VoiceProvider (M13) owns the single voice command engine for the app.
+ * VoiceProvider owns the single voice command engine for the app.
  *
- * It wraps useVoiceRecognition (Web Speech API + deterministic intent parser)
- * and is the ONLY place a voice intent becomes a side-effect:
- *  - navigation intents route immediately (read-only),
- *  - unknown intents fall back to the command palette prefilled with the
- *    transcript,
- *  - task/composio intents surface an approval-gated action preview; the user
- *    must click approve → this provider POSTs a queued task record. Nothing
- *    executes from voice.
+ * As of M14A, voice no longer resolves/executes actions itself — every final
+ * transcript flows through the central orchestrator
+ * (resolver → policy → executor adapter). This provider:
+ *  - passes the orchestrator's `orchestrate` into the recognition hook,
+ *  - implements `approve()` by calling the orchestrator's `approvePending`
+ *    (which re-executes the gated intent with `userConfirmed: true`),
+ *  - keeps the manual navigate/fallback/edit-in-composer buttons for the
+ *    approval-gated action preview.
+ *
+ * Navigation + fallback side-effects now live in the orchestrator's injected
+ * services (router.push / openPaletteWithQuery), not here.
  */
 export function VoiceProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { openComposerWithPrefill } = useTaskComposer();
   const { openPaletteWithQuery } = useCommandPaletteContext();
+  const { orchestrate, approvePending } = useOrchestrator();
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // onAction: react immediately to navigation + fallback; task actions pause
-  // for approval (the overlay renders the action preview).
-  //  - navigate: push the route. The hook moves to `completed` and the overlay
-  //    shows "Opened X" feedback, then auto-closes (handled in the overlay).
-  //  - fallback: hand the transcript to the command palette; the overlay shows
-  //    "Opening command palette" feedback, then auto-closes.
-  //  - queue-task / review-task: no auto-action; the user approves in the overlay.
-  // NOTE: onAction intentionally does NOT call closeOverlay — that would create a
-  // circular dep (onAction → closeOverlay → rec → onAction). The overlay owns the
-  // completed-phase auto-close.
-  const onAction = useCallback(
-    (action: VoiceAction) => {
-      if (action.type === 'navigate') {
-        router.push(action.route.href);
-      } else if (action.type === 'fallback') {
-        openPaletteWithQuery(action.transcript);
-      }
-    },
-    [router, openPaletteWithQuery],
-  );
-
-  const rec = useVoiceRecognition({ onAction });
+  const rec = useVoiceRecognition({ orchestrate });
 
   const closeOverlay = useCallback(() => {
     setOverlayOpen(false);
@@ -150,49 +133,29 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setOverlayOpen(false);
   }, [openComposerWithPrefill, rec.intent]);
 
+  // Approve re-runs the pending intent through the orchestrator with
+  // userConfirmed: true, then maps the result onto the voice state machine.
   const approve = useCallback(async () => {
-    const intent = rec.intent;
-    if (!intent || !intent.taskTitle) return;
     setSubmitting(true);
     try {
-      const body: TaskCreateInput = {
-        title: intent.taskTitle,
-        description: intent.taskDescription,
-        agent: intent.agent ?? 'openclaw',
-        priority: 'medium',
-        requiresApproval: intent.requiresApproval,
-        composioTools: intent.composioTools,
-        source: 'voice',
-        transcript: intent.transcript,
-        intent: intent.id,
-      };
-      const res = await fetch('/api/garrettos/tasks/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      const task = json?.data?.task;
-      if (!res.ok || !task) {
+      const result = await approvePending();
+      if (result.status === 'queued') {
         rec.resolve({
-          ok: false,
-          error: json?.warning || `Request failed (${res.status})`,
+          ok: true,
+          taskId: result.taskId,
+          taskTitle: result.taskTitle,
+          source: (result.debug?.source as 'server' | 'mock' | undefined) ?? undefined,
+          warning: result.warning,
         });
-        return;
+      } else {
+        rec.resolve({ ok: false, error: result.message });
       }
-      rec.resolve({
-        ok: true,
-        taskId: task.id,
-        taskTitle: task.title,
-        source: json.data.source ?? 'mock',
-        warning: json.warning,
-      });
     } catch {
-      rec.resolve({ ok: false, error: 'Network error — task not created' });
+      rec.resolve({ ok: false, error: 'Approval failed — task not created' });
     } finally {
       setSubmitting(false);
     }
-  }, [rec]);
+  }, [approvePending, rec]);
 
   // Derive a legacy lastCommand so the M9A VoiceTranscriptPanel (in the command
   // palette) keeps working for navigation intents.

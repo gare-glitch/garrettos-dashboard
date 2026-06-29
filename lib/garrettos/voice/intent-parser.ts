@@ -77,6 +77,17 @@ type ComposioRule = {
 
 const COMPOSIO_RULES: ComposioRule[] = [
   {
+    phrases: ['send an email to', 'send email to', 'send a message to', 'email to'],
+    id: 'composio.send_email',
+    label: 'Send email (Gmail)',
+    toolkit: 'gmail',
+    agent: 'opencode',
+    mutating: true,
+    title: (t) => `Send email — ${afterPhrase(t, ['send an email to', 'send email to', 'send a message to', 'email to'])}`,
+    description: (t) =>
+      `Use Composio Gmail tools to SEND an email. Sending is a mutating external action — requires explicit human approval before executing.\n\nTranscript: "${t}"`,
+  },
+  {
     phrases: ['draft an email to', 'draft an email', 'write an email to', 'compose an email to', 'draft email to'],
     id: 'composio.draft_email',
     label: 'Draft email (Gmail)',

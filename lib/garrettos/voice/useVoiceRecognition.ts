@@ -1,23 +1,33 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import type {
   SpeechRecognitionCtor,
   SpeechRecognitionEventLike,
   SpeechRecognitionLike,
   VoiceState,
 } from '@/lib/garrettos/speech/types';
-import { parseVoiceIntent } from './intent-parser';
-import { routeVoiceIntent } from './action-router';
-import { getVoiceAIMode, aiInterpretIntent, type AIVoiceMode } from './ai-intent-router';
+import { getVoiceAIMode, type AIVoiceMode } from './ai-intent-router';
 import { phaseToLegacyState } from './voice-types';
-import type { VoiceAction, VoiceIntent, VoicePhase, VoiceTaskResult } from './voice-types';
+import type { VoiceAction, VoiceIntent, VoicePhase, VoiceRoute, VoiceTaskResult } from './voice-types';
+import {
+  createRequest,
+  type OrchestratorIntent,
+  type OrchestratorOutcome,
+  type OrchestratorRequest,
+  type OrchestratorResult,
+} from '@/lib/garrettos/orchestrator/types';
 
 export type UseVoiceRecognitionOptions = {
   /** BCP-47 language tag for recognition. */
   lang?: string;
-  /** Fired when a final transcript is parsed into an action. */
-  onAction?: (action: VoiceAction) => void;
+  /**
+   * The central orchestrator entry point. When provided, every final transcript
+   * flows through it (resolver → policy → executor). The deterministic parser
+   * remains the resolver's fallback, so existing behavior is preserved.
+   */
+  orchestrate?: (request: OrchestratorRequest) => Promise<OrchestratorOutcome>;
 };
 
 export type UseVoiceRecognitionReturn = {
@@ -73,7 +83,8 @@ function getRecognitionCtor(): SpeechRecognitionCtor | null {
 export function useVoiceRecognition(
   options: UseVoiceRecognitionOptions = {},
 ): UseVoiceRecognitionReturn {
-  const { lang = 'en-US', onAction } = options;
+  const { lang = 'en-US', orchestrate } = options;
+  const pathname = usePathname();
 
   const [phase, setPhase] = useState<VoicePhase>('idle');
   const [interim, setInterim] = useState('');
@@ -86,10 +97,10 @@ export function useVoiceRecognition(
   const aiMode = useMemo<AIVoiceMode>(() => getVoiceAIMode(), []);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const onActionRef = useRef(onAction);
+  const orchestrateRef = useRef(orchestrate);
   useEffect(() => {
-    onActionRef.current = onAction;
-  }, [onAction]);
+    orchestrateRef.current = orchestrate;
+  }, [orchestrate]);
 
   const supported = useMemo(() => getRecognitionCtor() !== null, []);
 
@@ -132,38 +143,127 @@ export function useVoiceRecognition(
       setCompletionMessage(null);
       setPhase('interpreting');
 
-      // Deterministic parser is the default. When an AI mode is configured, try
-      // it first and fall back to deterministic on null/error (aiInterpretIntent
-      // returns null for all modes until a backend is wired).
-      let parsed = parseVoiceIntent(clean);
-      if (aiMode !== 'off') {
-        const ai = await aiInterpretIntent(clean, { mode: aiMode }).catch(() => null);
-        if (ai) parsed = ai;
+      const run = orchestrateRef.current;
+      if (!run) {
+        setError('Orchestrator not configured');
+        setPhase('error');
+        return;
       }
 
-      const routed = routeVoiceIntent(parsed);
-      setIntent(parsed);
-      setAction(routed);
+      const request = createRequest({
+        source: 'voice',
+        transcript: clean,
+        currentPage: pathname ?? undefined,
+        userConfirmed: false,
+      });
 
-      // Phase transition — never leave the machine in 'interpreting'.
-      //  - navigate/fallback → 'completed' with feedback; the integrator fires
-      //    the side-effect via onAction and the overlay auto-closes.
-      //  - queue-task/review-task → 'needs_approval' (user must approve).
-      if (routed.type === 'navigate') {
-        setCompletionMessage(`Opened ${routed.route.label}`);
-        setPhase('completed');
-        onActionRef.current?.(routed);
-      } else if (routed.type === 'fallback') {
-        setCompletionMessage('Opening command palette');
-        setPhase('completed');
-        onActionRef.current?.(routed);
-      } else {
-        setPhase('needs_approval');
-        onActionRef.current?.(routed);
+      let outcome: OrchestratorOutcome;
+      try {
+        outcome = await run(request);
+      } catch {
+        setError('Orchestration failed');
+        setPhase('error');
+        return;
       }
+
+      applyOutcome(outcome);
     },
-    [aiMode],
+    [pathname],
   );
+
+  /** Map an orchestrator outcome onto the voice state machine + UI models. */
+  function applyOutcome(outcome: OrchestratorOutcome) {
+    const { intent: oIntent, result } = outcome;
+    const voiceIntent = toVoiceIntent(oIntent);
+    setIntent(voiceIntent);
+    setAction(deriveAction(oIntent, result, voiceIntent));
+
+    switch (result.status) {
+      case 'completed':
+        setCompletionMessage(result.message);
+        setLastResult(null);
+        setPhase('completed');
+        break;
+      case 'queued':
+        setLastResult({
+          ok: true,
+          taskId: result.taskId,
+          taskTitle: result.taskTitle,
+          source: (result.debug?.source as 'server' | 'mock' | undefined) ?? undefined,
+          warning: result.warning,
+        });
+        setPhase('queued');
+        break;
+      case 'needs_approval':
+        setLastResult(null);
+        setPhase('needs_approval');
+        break;
+      case 'failed':
+        setLastResult({ ok: false, error: result.message });
+        setError(result.message);
+        setPhase('error');
+        break;
+      case 'unsupported':
+        // Fallback adapter already opened the command palette; show feedback and
+        // let the overlay auto-close. UI stays stable (no navigation/mutation).
+        setCompletionMessage(result.message);
+        setLastResult(null);
+        setPhase('completed');
+        break;
+      default:
+        setPhase('idle');
+    }
+  }
+
+  /** Build a VoiceIntent for the UI cards from the orchestrator intent. */
+  function toVoiceIntent(o: OrchestratorIntent): VoiceIntent {
+    if (o.rawIntent) return o.rawIntent;
+    const href = o.payload.href as string | undefined;
+    const label = o.payload.label as string | undefined;
+    const route: VoiceRoute | undefined = href && label ? { href, label } : undefined;
+    return {
+      id: o.action ?? o.type,
+      kind:
+        o.type === 'navigation' || o.type === 'memory' || o.type === 'system'
+          ? 'navigation'
+          : o.type === 'task'
+            ? 'task'
+            : o.type === 'composio'
+              ? 'composio'
+              : 'unknown',
+      label: o.action ?? 'Not recognized',
+      confidence: o.confidence,
+      requiresApproval: o.requiresApproval,
+      composioTools: o.composioTools,
+      agent: o.suggestedAgent,
+      route,
+      taskTitle: o.payload.taskTitle as string | undefined,
+      taskDescription: o.payload.taskDescription as string | undefined,
+      transcript: (o.payload.transcript as string | undefined) ?? '',
+    };
+  }
+
+  /** Derive a VoiceAction so the existing VoiceActionPreview keeps working. */
+  function deriveAction(
+    o: OrchestratorIntent,
+    result: OrchestratorResult,
+    voiceIntent: VoiceIntent,
+  ): VoiceAction | null {
+    if (result.status === 'needs_approval') {
+      const href = o.payload.href as string | undefined;
+      const label = o.payload.label as string | undefined;
+      if (href && label && (o.type === 'navigation' || o.type === 'memory' || o.type === 'system')) {
+        return { type: 'navigate', route: { href, label }, intent: voiceIntent };
+      }
+      return o.requiresApproval
+        ? { type: 'queue-task', intent: voiceIntent }
+        : { type: 'review-task', intent: voiceIntent };
+    }
+    if (result.status === 'queued' || result.status === 'failed') {
+      return { type: 'queue-task', intent: voiceIntent };
+    }
+    return null;
+  }
 
   const start = useCallback(() => {
     const Ctor = getRecognitionCtor();
