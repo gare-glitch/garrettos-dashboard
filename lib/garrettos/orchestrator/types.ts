@@ -120,8 +120,18 @@ export interface OrchestratorServices {
 
 /** Orchestrator runtime options. */
 export interface OrchestratorOptions {
-  /** AI interpretation mode (off by default; deterministic parser is fallback). */
-  aiMode?: 'off' | 'litellm' | 'openrouter' | 'nemotron';
+  /**
+   * AI interpretation mode (off by default; deterministic parser is fallback).
+   * When not `off` AND `aiResolve` is provided, the AI resolver runs first.
+   */
+  aiMode?: 'off' | 'mock' | 'litellm' | 'openrouter' | 'ollama';
+  /**
+   * Injected AI resolver. MUST return a validated `OrchestratorIntent` or null
+   * (never throw). The React layer wires this to POST /api/garrettos/ai-intent
+   * so upstream LLM keys stay server-side and the browser never calls an LLM.
+   * On null/throw the deterministic parser runs as the fallback.
+   */
+  aiResolve?: (transcript: string) => Promise<OrchestratorIntent | null>;
   /** Confidence required to auto-execute navigation (default 0.9). */
   navigationConfidenceThreshold?: number;
 }

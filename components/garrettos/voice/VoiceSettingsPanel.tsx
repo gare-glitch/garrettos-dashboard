@@ -67,8 +67,8 @@ export function VoiceSettingsPanel() {
       tone: aiMode === 'off' ? 'idle' : 'info',
       note:
         aiMode === 'off'
-          ? 'Rule-based parser (default). Set GARRETTOS_VOICE_AI_MODE=litellm|openrouter|nemotron for AI routing (not yet wired).'
-          : 'AI router selected but not yet wired — deterministic parser remains active.',
+          ? 'Rule-based parser (default). Set NEXT_PUBLIC_GARRETTOS_AI_INTENT_MODE=mock|litellm|openrouter|ollama to route intents through the AI resolver (server-side).'
+          : `AI resolver "${aiMode}" is active — every command still flows through the orchestrator, schema validation, and the safety policy. Deterministic parser is the fallback.`,
     },
     {
       label: 'ElevenLabs voice (TTS)',

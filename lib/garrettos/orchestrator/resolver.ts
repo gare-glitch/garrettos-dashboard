@@ -1,16 +1,25 @@
 /**
- * Intent resolver (M14A).
+ * Intent resolver (M14A → M14B).
  *
- * Turns an OrchestratorRequest into an OrchestratorIntent. The DEFAULT resolver
- * is deterministic and reuses the M13 voice intent parser (`parseVoiceIntent`)
- * so existing behavior is preserved — no regression, no new hallucinations.
+ * Turns an OrchestratorRequest into an OrchestratorIntent. Two resolvers:
  *
- * The AI router hook is here: when `options.aiMode !== 'off'`, an AI resolver
- * can be tried first (future). For now `aiInterpretIntent` returns null for
- * every mode, so the deterministic parser stays the source of truth.
+ *   1. AI resolver (optional) — runs first when `options.aiMode !== 'off'` and
+ *      an `aiResolve` function is injected. It returns a *validated*
+ *      OrchestratorIntent (pure data — the AI never executes anything). The
+ *      React layer wires `aiResolve` to POST /api/garrettos/ai-intent, which
+ *      runs the selected provider server-side and validates against the strict
+ *      AIIntentJSON schema.
+ *
+ *   2. Deterministic resolver (default + fallback) — reuses the M13 voice
+ *      intent parser (`parseVoiceIntent`). ALWAYS available. Runs whenever the
+ *      AI resolver is disabled, returns null, or throws — so behavior never
+ *      degrades below the rule-based parser.
+ *
+ * Either way the output is a pure OrchestratorIntent; the safety policy
+ * (`policies.ts`) runs AFTER this and re-gates dangerous/Composio/mutating
+ * intents regardless of what the resolver said.
  */
 import { parseVoiceIntent } from '@/lib/garrettos/voice/intent-parser';
-import { aiInterpretIntent } from '@/lib/garrettos/voice/ai-intent-router';
 import type { TaskAgent } from '@/lib/garrettos/types';
 import type { VoiceIntent, VoiceRoute } from '@/lib/garrettos/voice/voice-types';
 import type {
@@ -68,26 +77,22 @@ export function fromVoiceIntent(raw: VoiceIntent): OrchestratorIntent {
 }
 
 /**
- * Resolve a request to an intent. Deterministic by default; AI mode is a
- * no-op placeholder that falls back to deterministic on null.
+ * Resolve a request to an intent.
+ *
+ * AI-first when enabled + injected; deterministic otherwise. The AI branch is
+ * fully wrapped so any throw/null falls through to the deterministic parser.
  */
 export async function resolveIntent(
   request: OrchestratorRequest,
   options: OrchestratorOptions = {},
 ): Promise<OrchestratorIntent> {
-  const deterministic = parseVoiceIntent(request.transcript);
-
-  if (options.aiMode && options.aiMode !== 'off') {
-    const ai = await aiInterpretIntent(request.transcript, {
-      mode: options.aiMode,
-    }).catch(() => null);
+  if (options.aiMode && options.aiMode !== 'off' && options.aiResolve) {
+    const ai = await options.aiResolve(request.transcript).catch(() => null);
     if (ai) {
-      // Future: validate + clamp requiresApproval, then return fromVoiceIntent(ai).
-      return fromVoiceIntent(ai);
+      return ai;
     }
   }
-
-  return fromVoiceIntent(deterministic);
+  return fromVoiceIntent(parseVoiceIntent(request.transcript));
 }
 
 /** Derive a navigation route (href/label) from an intent, if it has one. */

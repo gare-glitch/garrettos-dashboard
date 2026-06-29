@@ -13,6 +13,7 @@ import type {
   VoicePhase,
   VoiceTaskResult,
 } from '@/lib/garrettos/voice/voice-types';
+import type { AIVoiceMode } from '@/lib/garrettos/voice/ai-intent-router';
 
 type VoiceContextValue = {
   // --- M9A legacy (kept for TopAppBar / CommandPalette / HomeHero) ---
@@ -36,8 +37,8 @@ type VoiceContextValue = {
   lastResult: VoiceTaskResult | null;
   /** Human feedback for the `completed` phase, e.g. "Opened Memory". */
   completionMessage: string | null;
-  /** Configured AI interpretation mode (off / litellm / openrouter / nemotron). */
-  aiMode: 'off' | 'litellm' | 'openrouter' | 'nemotron';
+  /** Configured AI interpretation mode (off / mock / litellm / openrouter / ollama). */
+  aiMode: AIVoiceMode;
   submitting: boolean;
   approve: () => Promise<void>;
   navigate: () => void;

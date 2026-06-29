@@ -55,10 +55,13 @@ compatibility.
 The **deterministic parser is the default and the fallback.** `resolveIntent`
 reuses the M13 `parseVoiceIntent` (rule-based, local, no network) and maps its
 `VoiceIntent` onto the richer `OrchestratorIntent` (e.g. navigation to `/memory`
-becomes type `memory`). When `GARRETTOS_VOICE_AI_MODE !== 'off'`, an AI resolver
-is tried first via `ai-intent-router.ts`; for now it returns `null` for every
-mode, so the deterministic parser stays the source of truth. Existing voice
-parsing behavior is unchanged.
+becomes type `memory`).
+
+When `aiMode !== 'off'` AND an `aiResolve` function is injected, the **AI
+resolver runs first** (see "AI Intent Router" below). It returns a *validated*
+`OrchestratorIntent` or `null`; on `null`/throw the deterministic parser runs,
+so behavior never degrades below the rule-based parser. The React layer injects
+`aiResolve` wired to `POST /api/garrettos/ai-intent` (keys stay server-side).
 
 ## Safety policy
 
@@ -112,18 +115,83 @@ last **10** outcomes. **No secrets**: only `source`, `transcript`, `intentType`,
 `status`, `message`, `requiresApproval`, `target`, `taskId`, `createdAt`. View
 it in **Settings → Integrations → Orchestrator audit** (developer panel).
 
-## Future AI router integration
+## AI Intent Router (M14B)
 
-The AI router seam is `resolver.ts` + `ai-intent-router.ts`. To wire a real
-backend:
+`lib/garrettos/orchestrator/ai-router/`
 
-1. Implement `aiInterpretIntent` for a mode (`litellm` / `openrouter` /
-   `nemotron`) with a strict `VoiceIntent` JSON schema.
-2. Clamp `requiresApproval: true` for any mutating/ambiguous AI output.
-3. Return `null` on any parse/transport error so the deterministic parser runs.
+The AI is plugged into the orchestrator as the **first** resolver stage. It is
+ONLY ever allowed to produce a JSON object matching the strict `AIIntentJSON`
+schema — it never executes anything, never returns prose, never returns
+free-form fields.
 
-No input method, executor, or UI needs to change — the orchestrator already
-calls the AI resolver first when `GARRETTOS_VOICE_AI_MODE` is set.
+### Pipeline
+
+```
+voice/command text
+  → orchestrator
+  → AI resolver if enabled (aiResolve injected → POST /api/garrettos/ai-intent)
+  → schema validation (validateAIIntent — strict; rejects/drops unknown fields)
+  → safety policy (policies.ts — ALWAYS re-runs, even after the AI)
+  → executor adapter
+```
+
+The deterministic resolver remains the fallback: if the AI mode is `off`, the
+route returns `null`, schema validation fails, or the provider throws, the
+deterministic parser runs and the pipeline is identical to M14A.
+
+### Providers
+
+`ai-router/providers/`
+
+| Provider | Mode | Target | Notes |
+| --- | --- | --- | --- |
+| `mock.ts` | `mock` | — | Canned `AIIntentJSON` for a handful of phrases; no network. Mock-miss throws → deterministic fallback. Safe in tests/CI. |
+| `litellm.ts` | `litellm` | `$LITELLM_BASE_URL/chat/completions` | Self-hosted OpenAI-compatible proxy. Key from `LITELLM_API_KEY`. |
+| `openrouter.ts` | `openrouter` | `https://openrouter.ai/api/v1/chat/completions` | "ready" — implemented; runs only when `OPENROUTER_API_KEY` is set, else throws → fallback. |
+| `ollama.ts` | `ollama` | `$OLLAMA_BASE_URL/api/chat` (default `localhost:11434`) | "ready" — local, no key; forces `format: 'json'`. Runs only when a local Ollama + model are present. |
+
+All LLM providers send the same strict `AI_SYSTEM_PROMPT` that pins output to
+the `AIIntentJSON` schema, forbids prose/markdown, and tells the model it is an
+intent *descriptor*, not an executor. OpenAI-compatible providers request
+`response_format: { type: 'json_object' }`; Ollama uses `format: 'json'`.
+
+### Keys stay server-side
+
+The browser **never** calls an upstream LLM. The client orchestrator POSTs the
+transcript to `POST /api/garrettos/ai-intent`; the route runs the provider
+server-side, validates the JSON, and returns a pure `OrchestratorIntent` (or
+`null`). Provider API keys (`LITELLM_API_KEY`, `OPENROUTER_API_KEY`, …) are read
+from env only inside the provider at call time and are never serialized.
+
+### Mode selection
+
+`getAIIntentMode()` reads, in priority order:
+
+1. `NEXT_PUBLIC_GARRETTOS_AI_INTENT_MODE` — Next inlines `NEXT_PUBLIC_*` into the
+   client bundle, so the browser knows the mode and can skip the network call
+   entirely when AI is `off` (the deterministic fast path stays zero-latency).
+2. `GARRETTOS_AI_INTENT_MODE` — server-only.
+3. `GARRETTOS_VOICE_AI_MODE` — legacy M13/M14A name.
+
+Values: `off` (default) | `mock` | `litellm` | `openrouter` | `ollama`.
+
+Provider config env (server-only): `LITELLM_BASE_URL` / `LITELLM_MODEL` /
+`LITELLM_API_KEY`; `OPENROUTER_BASE_URL` / `OPENROUTER_MODEL` / `OPENROUTER_API_KEY`;
+`OLLAMA_BASE_URL` / `OLLAMA_MODEL`.
+
+### Why this is safe
+
+- The AI only **describes** an intent (`AIIntentJSON`); it has no execution path.
+- `validateAIIntent` is a strict chokepoint — unknown keys are dropped, type/
+  confidence/`requiresApproval` are shape-checked. Anything that fails is
+  rejected → deterministic fallback.
+- The **safety policy re-runs after the AI** on the original transcript:
+  dangerous verbs, Composio, and mutating tasks are re-gated to
+  `requiresApproval: true` regardless of what the model said. The AI's
+  `requiresApproval: false` is never trusted on its own.
+- So even a misbehaving or prompt-injected model cannot auto-execute a
+  dangerous action — the worst it can do is produce a wrong intent that the
+  policy still gates, or get rejected and fall back to deterministic.
 
 ## What still uses the legacy parser
 
@@ -139,7 +207,8 @@ calls the AI resolver first when `GARRETTOS_VOICE_AI_MODE` is set.
 ## Deterministic examples table
 
 Verified by `scripts/garrettos_orchestrator_verify.ts`
-(`npx tsx scripts/garrettos_orchestrator_verify.ts` → **10 passed, 0 failed**).
+(`npx tsx scripts/garrettos_orchestrator_verify.ts` → deterministic block:
+**10 passed, 0 failed**).
 
 | Input | Intent type | Result status | Approval |
 | --- | --- | --- | --- |
@@ -154,23 +223,53 @@ Verified by `scripts/garrettos_orchestrator_verify.ts`
 | `delete server files` | task | needs_approval | yes (dangerous → blocked from auto-run) |
 | `xyzzy florp` | unknown | unsupported | no (opens command palette) |
 
+## AI (mock provider) examples table
+
+The same harness runs a second block with `aiMode: 'mock'` and an injected
+`aiResolve` that calls the mock provider — exercising the full AI path
+(provider → schema validation → safety policy → executor) including the
+deterministic fallback on a mock-miss (**7 passed, 0 failed**).
+
+| Input | Intent type | Result status | Approval | Source |
+| --- | --- | --- | --- | --- |
+| `open memory` | memory | completed | no | AI (mock) |
+| `open system` | system | completed | no | AI (mock) |
+| `open openclaw` | navigation | completed | no | AI (mock) |
+| `research trends on the gpu market` | task | queued | no (read-only) | AI (mock) |
+| `send email to professor` | composio | needs_approval | yes | AI (mock) |
+| `delete the old logs` | task | needs_approval | yes (dangerous re-gated by policy) | AI (mock) |
+| `xyzzy florp` | unknown | unsupported | no | deterministic fallback (mock-miss) |
+
 ## Files
 
 ```
 lib/garrettos/orchestrator/
   types.ts              # Request/Intent/Result/Services/Options + createRequest
-  resolver.ts           # request → intent (deterministic default; AI hook)
+  resolver.ts           # request → intent (AI-first when enabled; deterministic fallback)
   policies.ts           # safety policy (dangerous verbs, Composio, read-only)
   executor.ts           # intent → adapter dispatch
   orchestrator.ts       # runOrchestrator: resolver → policy → executor
   audit-log.ts          # localStorage ring buffer (last 10, no secrets)
+  ai-router/            # M14B — AI intent router
+    mode.ts             # AIIntentMode + getAIIntentMode (client-safe, no provider imports)
+    schema.ts           # AIIntentJSON + validateAIIntent + aiJSONToIntent
+    index.ts            # createAIProvider, interpretWithAI, getAIProviderConfig
+    providers/
+      types.ts          # AIProvider interface + shared AI_SYSTEM_PROMPT
+      http.ts           # fetchWithTimeout, content JSON parse, key read (server-only)
+      mock.ts           # canned intents (no network; tests/CI)
+      litellm.ts        # LiteLLM proxy (OpenAI-compatible)
+      openrouter.ts     # OpenRouter (ready; key-gated)
+      ollama.ts         # Ollama local (ready; format:json)
   adapters/
     navigation.ts memory.ts system.ts task.ts composio.ts fallback.ts
 
 components/garrettos/orchestrator/
-  OrchestratorProvider.tsx  # React binding: services + orchestrate + approvePending + audit
+  OrchestratorProvider.tsx  # React binding: services + aiResolve (→ /api/garrettos/ai-intent) + audit
   OrchestratorAuditPanel.tsx# dev panel (Settings)
   index.ts
 
-scripts/garrettos_orchestrator_verify.ts  # deterministic examples harness
+app/api/garrettos/ai-intent/route.ts  # server-side AI intent resolution (keys stay server-side)
+
+scripts/garrettos_orchestrator_verify.ts  # deterministic + mock-AI examples harness
 ```

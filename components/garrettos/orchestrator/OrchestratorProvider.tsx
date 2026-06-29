@@ -7,7 +7,7 @@ import {
   executeIntent,
   createRequest,
 } from '@/lib/garrettos/orchestrator/orchestrator';
-import { getVoiceAIMode } from '@/lib/garrettos/voice/ai-intent-router';
+import { getAIIntentMode } from '@/lib/garrettos/orchestrator/ai-router/mode';
 import {
   appendAudit as appendAuditEntry,
   readAudit,
@@ -16,6 +16,7 @@ import {
   type OrchestratorAuditEntry,
 } from '@/lib/garrettos/orchestrator/audit-log';
 import type {
+  OrchestratorIntent,
   OrchestratorOptions,
   OrchestratorOutcome,
   OrchestratorRequest,
@@ -59,10 +60,36 @@ export function OrchestratorProvider({ children }: { children: React.ReactNode }
   const pendingRef = useRef<{ intent: OrchestratorOutcome['intent']; request: OrchestratorRequest } | null>(null);
   const [audit, setAudit] = useState<OrchestratorAuditEntry[]>(() => readAudit());
 
-  const aiMode = getVoiceAIMode();
+  const aiMode = getAIIntentMode();
+
+  // AI resolver: the browser POSTs the transcript to the server route, which
+  // runs the selected provider, validates the JSON, and returns a pure
+  // OrchestratorIntent (or null → deterministic fallback). Upstream LLM keys
+  // stay server-side; the browser only ever sees the validated intent.
+  const aiResolve = useMemo<
+    ((transcript: string) => Promise<OrchestratorIntent | null>) | undefined
+  >(() => {
+    if (aiMode === 'off') return undefined;
+    return async (transcript: string): Promise<OrchestratorIntent | null> => {
+      try {
+        const res = await fetch('/api/garrettos/ai-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript, mode: aiMode }),
+        });
+        const json = (await res.json()) as {
+          data?: { intent?: OrchestratorIntent | null };
+        };
+        return json?.data?.intent ?? null;
+      } catch {
+        return null;
+      }
+    };
+  }, [aiMode]);
+
   const options = useMemo<OrchestratorOptions>(
-    () => ({ aiMode, navigationConfidenceThreshold: 0.9 }),
-    [aiMode],
+    () => ({ aiMode, aiResolve, navigationConfidenceThreshold: 0.9 }),
+    [aiMode, aiResolve],
   );
 
   const services = useMemo<OrchestratorServices>(

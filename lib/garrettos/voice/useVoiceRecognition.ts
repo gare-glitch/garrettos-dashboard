@@ -47,8 +47,8 @@ export type UseVoiceRecognitionReturn = {
   lastResult: VoiceTaskResult | null;
   /** Human feedback for the `completed` phase, e.g. "Opened Memory". */
   completionMessage: string | null;
-  /** Configured AI interpretation mode (off / litellm / openrouter / nemotron). */
-  aiMode: 'off' | 'litellm' | 'openrouter' | 'nemotron';
+  /** Configured AI interpretation mode (off / mock / litellm / openrouter / ollama). */
+  aiMode: AIVoiceMode;
   start: () => void;
   stop: () => void;
   reset: () => void;

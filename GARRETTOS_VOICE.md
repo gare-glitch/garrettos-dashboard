@@ -59,13 +59,24 @@ on `interpreting` after a final transcript resolves.
 
 ## AI interpretation mode
 
-The deterministic parser is the default and always runs. A placeholder AI router
-(`ai-intent-router.ts`) is selected with `GARRETTOS_VOICE_AI_MODE`:
-`off` (default) | `litellm` | `openrouter` | `nemotron`. Non-`off` modes are not
-yet wired — `aiInterpretIntent` returns `null` so the deterministic parser stays
-the source of truth. The active mode is shown in Voice settings and the overlay
-debug panel. Future wiring goes inside `aiInterpretIntent` without changing the
-hook's public surface.
+The deterministic parser is the default and always runs as the orchestrator's
+resolver fallback. A real AI intent router (`lib/garrettos/orchestrator/ai-router`,
+M14B) is plugged into the central orchestrator and is selected with
+`NEXT_PUBLIC_GARRETTOS_AI_INTENT_MODE` (preferred) / `GARRETTOS_AI_INTENT_MODE` /
+legacy `GARRETTOS_VOICE_AI_MODE`:
+`off` (default) | `mock` | `litellm` | `openrouter` | `ollama`.
+
+- The AI **only produces `OrchestratorIntent` JSON** — it never executes.
+- Output is validated against a strict schema and the safety policy re-runs
+  after it, so dangerous/Composio/mutating intents are still approval-gated.
+- The browser never calls an LLM directly; the orchestrator POSTs to
+  `/api/garrettos/ai-intent` (server-side), keeping provider keys server-side.
+- On any failure (off / null / schema fail / provider throw) the deterministic
+  parser runs, so behavior never degrades.
+
+`ai-intent-router.ts` is now a thin compatibility shim re-exporting the mode
+helper; the active mode is shown in Voice settings and the overlay debug panel.
+See `GARRETTOS_ORCHESTRATOR.md` → "AI Intent Router (M14B)" for the full pipeline.
 
 ## Debug panel
 
