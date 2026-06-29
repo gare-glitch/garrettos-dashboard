@@ -496,6 +496,9 @@ def tasks(authorization: str | None = Header(default=None)):
                 context_path = fm.get("context_path", "")
                 context_sources_raw = fm.get("context_sources", "")
                 context_sources = [s for s in context_sources_raw.split(",") if s]
+                # M12B: Composio toolkits the agent may use.
+                composio_tools_raw = fm.get("composio_tools", "")
+                composio_tools = [t for t in re.split(r"[,\s]+", composio_tools_raw) if t]
                 # A short, sanitized preview of the context bundle (first ~30 lines).
                 context_preview = ""
                 if context_path:
@@ -526,6 +529,7 @@ def tasks(authorization: str | None = Header(default=None)):
                     "context_sources": context_sources,
                     "memory_injected": fm.get("memory_injected", "false").lower() == "true",
                     "context_preview": context_preview,
+                    "composio_tools": composio_tools,
                 })
         except Exception:
             continue
@@ -602,6 +606,20 @@ async def create_task(request: Request, authorization: str | None = Header(defau
     if target_repo and _SHELL_META_RE.search(target_repo):
         return JSONResponse({"detail": "targetRepo contains disallowed characters"}, status_code=400)
 
+    # composio_tools (M12B): optional list of allowed Composio toolkit slugs.
+    composio_tools_raw = body.get("composioTools", [])
+    composio_tools: list[str] = []
+    if isinstance(composio_tools_raw, list):
+        for t in composio_tools_raw:
+            t = str(t).strip().lower()
+            if t and t in COMPOSIO_ALLOWED_TOOLKITS and t not in composio_tools:
+                composio_tools.append(t)
+    elif isinstance(composio_tools_raw, str) and composio_tools_raw.strip():
+        for t in re.split(r"[,\s]+", composio_tools_raw):
+            t = t.strip().lower()
+            if t and t in COMPOSIO_ALLOWED_TOOLKITS and t not in composio_tools:
+                composio_tools.append(t)
+
     # Reject shell metacharacters in title/description too — defense in depth
     # so a future execution daemon can never be tricked by stored metadata.
     if _SHELL_META_RE.search(title) or _SHELL_META_RE.search(description):
@@ -645,7 +663,9 @@ async def create_task(request: Request, authorization: str | None = Header(defau
         f"created_at: {created_at}",
     ]
     if target_repo:
-        fm_lines.append(f"target_repo: {target_repo}")
+        fm_lines.append(f"repo: {target_repo}")
+    if composio_tools:
+        fm_lines.append(f"composio_tools: {','.join(composio_tools)}")
     fm_lines.append("---")
     fm_lines.append("")
     if description:
@@ -953,6 +973,83 @@ def memory(authorization: str | None = Header(default=None)):
 # /integrations — reachability probes
 # ---------------------------------------------------------------------------
 
+# Allowed Composio toolkit slugs that may appear in task `composio_tools:`.
+COMPOSIO_ALLOWED_TOOLKITS = {"gmail", "google_calendar", "github", "slack", "notion"}
+
+
+def _composio_probe() -> dict[str, Any]:
+    """Best-effort, read-only Composio CLI readiness probe.
+
+    Never exposes tokens. Every output is scrubbed before being surfaced. All
+    commands are hard-coded (no user input) and run with a short timeout. If
+    Composio isn't installed, every field degrades gracefully to "not installed".
+    """
+    probe: dict[str, Any] = {
+        "installed": False,
+        "authenticated": False,
+        "version": "",
+        "cli_mode": True,          # CLI is the recommended/supported mode
+        "mcp_mode": False,         # MCP is optional/dev-only
+        "connected_accounts": [],
+        "toolkits": [],
+        "status": "not installed",
+        "tone": "warn",
+        "note": "Composio CLI not detected — install with `pip install composio-core`",
+    }
+
+    # 1. Installed?
+    version = safe_run(["composio", "--version"], timeout=4) or safe_run(["composio", "version"], timeout=4)
+    if not version:
+        # Fall back to `which` in case --version isn't a supported subcommand.
+        if safe_run(["which", "composio"]):
+            version = "(unknown version)"
+        else:
+            return probe
+    probe["installed"] = True
+    probe["version"] = scrub(version)[:80]
+
+    # 2. Authenticated? (`composio whoami` returns user info when logged in)
+    whoami = safe_run(["composio", "whoami"], timeout=5)
+    probe["authenticated"] = bool(whoami and "error" not in (whoami or "").lower())
+    if not probe["authenticated"]:
+        probe["status"] = "not authenticated"
+        probe["tone"] = "warn"
+        probe["note"] = "Run `composio login` on the VPS to authenticate"
+        return probe
+
+    # 3. Connected accounts (best-effort, scrubbed, names only).
+    accounts_raw = safe_run(["composio", "apps", "list"], timeout=6) or safe_run(
+        ["composio", "connected-accounts", "list"], timeout=6
+    )
+    accounts: list[str] = []
+    if accounts_raw:
+        for line in scrub(accounts_raw).splitlines():
+            line = line.strip().lower()
+            # Take the first token of each non-empty line as a slug-ish name.
+            if line and not line.startswith(("-", "id", "name", "==")):
+                accounts.append(line.split()[0][:40])
+    probe["connected_accounts"] = accounts[:20]
+
+    # 4. Available toolkits (best-effort, capped, names only — safe to surface).
+    toolkits_raw = safe_run(["composio", "toolkits", "list"], timeout=6)
+    toolkits: list[str] = []
+    if toolkits_raw:
+        for line in scrub(toolkits_raw).splitlines():
+            line = line.strip().lower()
+            if line and not line.startswith(("-", "id", "name", "==")):
+                toolkits.append(line.split()[0][:40])
+    probe["toolkits"] = toolkits[:40]
+
+    if accounts:
+        probe["status"] = "connected"
+        probe["tone"] = "good"
+        probe["note"] = f"{len(accounts)} connected app(s)"
+    else:
+        probe["status"] = "authenticated"
+        probe["tone"] = "info"
+        probe["note"] = "Authenticated but no connected apps yet"
+    return probe
+
 
 @app.get("/integrations")
 def integrations(authorization: str | None = Header(default=None)):
@@ -965,6 +1062,7 @@ def integrations(authorization: str | None = Header(default=None)):
     docker_ok = safe_run(["docker", "info"]) is not None
     openclaw_repo = Path("/root/openclaw-advanced").exists() or Path("/root/OpenClaw").exists()
     vault_exists = any(p.exists() for p in VAULT_PATHS)
+    composio = _composio_probe()
 
     rows: list[dict[str, Any]] = [
         {"name": "LiteLLM", "env": ["LITELLM_BASE_URL"], "status": "connected" if litellm_ok else "missing env",
@@ -981,6 +1079,8 @@ def integrations(authorization: str | None = Header(default=None)):
          "tone": "good" if openclaw_repo else "warn", "lastUsed": "—"},
         {"name": "Vault", "env": [], "status": "connected" if vault_exists else "missing env",
          "tone": "good" if vault_exists else "warn", "lastUsed": "—"},
+        {"name": "Composio CLI", "env": [], "status": composio["status"], "tone": composio["tone"],
+         "lastUsed": composio["note"]},
     ]
     connected = sum(1 for r in rows if r["status"] == "connected")
     missing_env = sum(1 for r in rows if r["status"] == "missing env")
@@ -988,6 +1088,7 @@ def integrations(authorization: str | None = Header(default=None)):
     return envelope({
         "integrations": rows,
         "stats": {"connected": connected, "mocked": 0, "missingEnv": missing_env, "total": len(rows)},
+        "composio": composio,
     })
 
 

@@ -142,6 +142,18 @@ export const mockProvider: GarrettOSDataProvider = {
     const payload: IntegrationsPayload = {
       integrations: flat,
       stats: { connected, mocked, missingEnv, total: flat.length },
+      composio: {
+        installed: true,
+        authenticated: true,
+        version: 'composio-core 0.1.0 (mock)',
+        cliMode: true,
+        mcpMode: false,
+        connectedAccounts: ['github', 'gmail'],
+        toolkits: ['gmail', 'google_calendar', 'github', 'slack', 'notion'],
+        status: 'connected',
+        tone: 'good',
+        note: '2 connected app(s) — mock preview',
+      },
     };
     return ok(payload, 'mock');
   },
@@ -181,6 +193,7 @@ export const mockProvider: GarrettOSDataProvider = {
       description: input.description?.trim() || undefined,
       requiresApproval: input.requiresApproval,
       targetRepo: input.targetRepo?.trim() || undefined,
+      composioTools: input.composioTools && input.composioTools.length > 0 ? [...input.composioTools] : undefined,
       createdAt: now,
       updated: now,
     };

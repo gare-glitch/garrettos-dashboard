@@ -89,6 +89,8 @@ export type TaskRun = OsTask & {
   requiresApproval?: boolean;
   /** Target repo/project path the task operates on (M10). */
   targetRepo?: string;
+  /** Composio toolkits the agent may use during the run (M12B). */
+  composioTools?: string[];
   /** ISO timestamp the task was created (M10). */
   createdAt?: string;
   /** tmux session name the daemon launched the agent in (M11). */
@@ -124,6 +126,8 @@ export type TaskCreateInput = {
   priority: 'low' | 'medium' | 'high';
   requiresApproval: boolean;
   targetRepo?: string;
+  /** Composio toolkits the agent may use during the run (M12B). */
+  composioTools?: string[];
 };
 
 /** Result of creating a task — the persisted TaskRun plus its source. */
@@ -278,6 +282,24 @@ export type MemoryPayload = {
 export type IntegrationsPayload = {
   integrations: IntegrationStatus[];
   stats: { connected: number; mocked: number; missingEnv: number; total: number };
+  /** Composio CLI readiness (M12B). Omitted in mock mode. */
+  composio?: ComposioStatus;
+};
+
+/** Composio CLI readiness probe result (M12B). Read-only — never contains tokens. */
+export type ComposioStatus = {
+  installed: boolean;
+  authenticated: boolean;
+  version: string;
+  /** CLI mode is the recommended/supported mode for agent runs. */
+  cliMode: boolean;
+  /** MCP mode is optional/dev-only. */
+  mcpMode: boolean;
+  connectedAccounts: string[];
+  toolkits: string[];
+  status: string;
+  tone: StatusTone;
+  note: string;
 };
 
 export type EventsPayload = {

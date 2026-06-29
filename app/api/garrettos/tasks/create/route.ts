@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 const ALLOWED_AGENTS = new Set(['opencode', 'claude', 'openclaw', 'manual']);
 const ALLOWED_PRIORITIES = new Set(['low', 'medium', 'high']);
+const ALLOWED_COMPOSIO_TOOLKITS = new Set(['gmail', 'google_calendar', 'github', 'slack', 'notion']);
 const MAX_TITLE = 160;
 const MAX_DESCRIPTION = 4000;
 const MAX_TARGET_REPO = 240;
@@ -101,6 +102,18 @@ function validateCreateInput(body: unknown): ValidationResult {
     }
   }
 
+  // composioTools (M12B): optional array of allowed Composio toolkit slugs.
+  const composioTools: string[] = [];
+  const rawTools = b.composioTools;
+  if (Array.isArray(rawTools)) {
+    for (const t of rawTools) {
+      const slug = typeof t === 'string' ? t.trim().toLowerCase() : '';
+      if (slug && ALLOWED_COMPOSIO_TOOLKITS.has(slug) && !composioTools.includes(slug)) {
+        composioTools.push(slug);
+      }
+    }
+  }
+
   return {
     ok: true,
     input: {
@@ -110,6 +123,7 @@ function validateCreateInput(body: unknown): ValidationResult {
       priority: priority as TaskCreateInput['priority'],
       requiresApproval,
       targetRepo: targetRepo || undefined,
+      composioTools: composioTools.length > 0 ? composioTools : undefined,
     },
   };
 }

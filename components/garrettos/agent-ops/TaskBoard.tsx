@@ -134,6 +134,11 @@ export function TaskBoard({
                         {t.requiresApproval ? (
                           <p className="mt-0.5 label-caps text-[9px] text-primary">requires approval</p>
                         ) : null}
+                        {t.composioTools && t.composioTools.length > 0 ? (
+                          <p className="mt-0.5 truncate font-mono text-[9px] text-secondary/70">
+                            composio: {t.composioTools.join(', ')}
+                          </p>
+                        ) : null}
                         {t.memoryInjected && t.contextSources && t.contextSources.length > 0 ? (
                           <p className="mt-0.5 truncate font-mono text-[9px] text-secondary/80">
                             context: {t.contextSources.length} sources · {t.contextBytes ?? 0}b

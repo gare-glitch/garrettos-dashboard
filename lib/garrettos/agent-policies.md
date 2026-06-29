@@ -77,3 +77,35 @@ shared rules and the relevant agent policy are part of the `EXECUTION RULES`
 section of the combined prompt fed to the agent on stdin. The agent never sees
 secrets (the builder sanitizes them) and never receives the task body as a
 shell command (it is input text inside the prompt).
+
+## Composio external-actions policy (M12B)
+
+Composio is the external-actions layer for GarrettOS agents. It lets an agent
+call external services (Gmail, Google Calendar, GitHub, Slack, Notion) through
+the Composio CLI during a supervised tmux run.
+
+**Mode:** CLI mode is the only supported mode for production agent runs. MCP
+mode is optional / dev-only and is not wired into the loop daemon.
+
+**Hard rules:**
+
+- Composio may only be called **inside a tmux agent run** launched by the loop
+  daemon. The dashboard never triggers Composio actions directly.
+- No destructive Composio action may run without `requires_approval: true` on
+  the task. Destructive = anything that sends, deletes, modifies, or
+  overwrites data on an external service (send email, delete event, force-push,
+  post message, update page).
+- Gmail, Google Calendar, and GitHub actions require an **explicit instruction
+  in the task body** describing what to do and to whom. An agent must never
+  invent a recipient, repo, or calendar event on its own.
+- A task declares which toolkits it may use via `composio_tools:` in its
+  frontmatter (e.g. `composio_tools: gmail,google_calendar`). An agent may only
+  use toolkits listed there; anything else is out of scope.
+- **Never expose Composio tokens or API keys in logs.** The bridge readiness
+  probe scrubs all CLI output before surfacing it; agents must not print tokens
+  either.
+- Read-only Composio calls (list emails, list events, read repo metadata) are
+  allowed without approval **only** for toolkits declared in the task.
+- The daemon does not itself call Composio — it only launches the agent. The
+  agent decides whether and when to call the CLI, constrained by the rules
+  above and the toolkit allow-list in the task.

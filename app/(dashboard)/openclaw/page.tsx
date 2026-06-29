@@ -37,6 +37,7 @@ import {
   osTmuxSessions,
 } from '@/data/os-mock';
 import { useGarrettOSData } from '@/lib/garrettos/use-garrettos-data';
+import { ComposioStatusCard } from '@/components/garrettos/agent-ops/ComposioStatusCard';
 import type {
   AgentsPayload,
   EventsPayload,
@@ -351,6 +352,8 @@ export default function OpenClawPage() {
           </StaggerReveal>
         )}
       </ScrollReveal>
+
+      <ComposioStatusCard />
 
       <ApprovalDialog
         approval={approval}

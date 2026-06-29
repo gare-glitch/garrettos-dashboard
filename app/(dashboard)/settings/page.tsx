@@ -27,6 +27,7 @@ import {
   settingsNavItems,
   settingsSecurityAlert,
 } from '@/data/integrations-mock';
+import { ComposioStatusCard } from '@/components/garrettos/agent-ops/ComposioStatusCard';
 
 const sectionTitles: Record<string, string> = {
   general: 'General',
@@ -242,6 +243,8 @@ function ApiKeysSection() {
 function IntegrationsSection() {
   return (
     <div className="space-y-6">
+      <ComposioStatusCard />
+
       <ScrollReveal>
         <GlassPanel variant="card" className="p-4 md:p-5">
           <SectionHeaderCompact

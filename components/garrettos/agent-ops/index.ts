@@ -5,3 +5,4 @@ export { BlockedRescue } from './BlockedRescue';
 export { AgentHealthGrid } from './AgentHealthGrid';
 export { TaskComposer, type TaskComposerResult } from './TaskComposer';
 export { TaskComposerProvider, useTaskComposer } from './TaskComposerContext';
+export { ComposioStatusCard } from './ComposioStatusCard';

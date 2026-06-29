@@ -164,7 +164,7 @@ def rewrite_frontmatter(path: Path, updates: dict[str, str]) -> bool:
     # Re-serialize frontmatter in a stable key order.
     preferred = [
         "id", "title", "status", "agent", "priority", "requires_approval",
-        "repo", "created_at", "started_at", "completed_at",
+        "repo", "composio_tools", "created_at", "started_at", "completed_at",
         "tmux_session", "log_path", "context_path", "context_bytes",
         "context_sources", "memory_injected", "next_action",
     ]

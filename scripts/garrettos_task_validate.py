@@ -30,6 +30,8 @@ from typing import Any
 ALLOWED_AGENTS = {"opencode", "claude", "openclaw", "manual"}
 ALLOWED_STATUSES = {"queued", "running", "review", "blocked", "done"}
 ALLOWED_PRIORITIES = {"low", "medium", "high"}
+# Composio toolkit slugs that may appear in a task's `composio_tools:` field (M12B).
+COMPOSIO_ALLOWED_TOOLKITS = {"gmail", "google_calendar", "github", "slack", "notion"}
 REQUIRED_FIELDS = ("id", "title", "agent", "status")
 
 # Shell metacharacters / command separators that must never appear in metadata
@@ -159,6 +161,16 @@ def validate_task_file(path: Path) -> list[TaskIssue]:
         issues.append(
             TaskIssue(path, "priority", f"must be one of {sorted(ALLOWED_PRIORITIES)}")
         )
+
+    # composio_tools (optional, M12B): comma/space-separated allowed toolkits.
+    composio_raw = fm.get("composio_tools", "").strip()
+    if composio_raw:
+        tools = [t.strip().lower() for t in re.split(r"[,\s]+", composio_raw) if t.strip()]
+        bad = [t for t in tools if t not in COMPOSIO_ALLOWED_TOOLKITS]
+        if bad:
+            issues.append(
+                TaskIssue(path, "composio_tools", f"unknown toolkit(s): {bad}; allowed: {sorted(COMPOSIO_ALLOWED_TOOLKITS)}")
+            )
 
     # title length
     title = fm.get("title", "")

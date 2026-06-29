@@ -24,6 +24,14 @@ const PRIORITIES: { id: Priority; label: string }[] = [
   { id: 'high', label: 'High' },
 ];
 
+const COMPOSIO_TOOLKITS: { id: string; label: string }[] = [
+  { id: 'gmail', label: 'Gmail' },
+  { id: 'google_calendar', label: 'Calendar' },
+  { id: 'github', label: 'GitHub' },
+  { id: 'slack', label: 'Slack' },
+  { id: 'notion', label: 'Notion' },
+];
+
 export type TaskComposerResult = {
   task: TaskRun;
   source: 'server' | 'mock';
@@ -56,6 +64,7 @@ export function TaskComposer({
   const [priority, setPriority] = useState<Priority>('medium');
   const [requiresApproval, setRequiresApproval] = useState(true);
   const [targetRepo, setTargetRepo] = useState('');
+  const [composioTools, setComposioTools] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<TaskComposerResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +76,7 @@ export function TaskComposer({
     setPriority('medium');
     setRequiresApproval(true);
     setTargetRepo('');
+    setComposioTools([]);
     setResult(null);
     setError(null);
   }
@@ -88,6 +98,7 @@ export function TaskComposer({
           priority,
           requiresApproval,
           targetRepo: targetRepo.trim() || undefined,
+          composioTools: composioTools.length > 0 ? composioTools : undefined,
         }),
       });
       const json = await res.json();
@@ -243,6 +254,37 @@ export function TaskComposer({
                     placeholder="e.g. garrettos-dashboard"
                     className={inputClass}
                   />
+                </Field>
+
+                <Field label="Composio tools (optional)">
+                  <div className="flex flex-wrap gap-1.5">
+                    {COMPOSIO_TOOLKITS.map((tk) => {
+                      const active = composioTools.includes(tk.id);
+                      return (
+                        <button
+                          key={tk.id}
+                          type="button"
+                          onClick={() =>
+                            setComposioTools((prev) =>
+                              active ? prev.filter((t) => t !== tk.id) : [...prev, tk.id],
+                            )
+                          }
+                          aria-pressed={active}
+                          className={cn(
+                            'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                            active
+                              ? 'border-secondary/40 bg-secondary/10 text-secondary'
+                              : 'border-white/8 bg-white/[0.02] text-on-surface-variant hover:border-secondary/20',
+                          )}
+                        >
+                          {tk.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[10px] text-outline">
+                    External actions the agent may use during the run. Destructive actions still require approval.
+                  </p>
                 </Field>
 
                 <label className="flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5">
