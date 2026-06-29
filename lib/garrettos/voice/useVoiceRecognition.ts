@@ -9,6 +9,7 @@ import type {
 } from '@/lib/garrettos/speech/types';
 import { parseVoiceIntent } from './intent-parser';
 import { routeVoiceIntent } from './action-router';
+import { getVoiceAIMode, aiInterpretIntent, type AIVoiceMode } from './ai-intent-router';
 import { phaseToLegacyState } from './voice-types';
 import type { VoiceAction, VoiceIntent, VoicePhase, VoiceTaskResult } from './voice-types';
 
@@ -34,6 +35,10 @@ export type UseVoiceRecognitionReturn = {
   supported: boolean;
   error: string | null;
   lastResult: VoiceTaskResult | null;
+  /** Human feedback for the `completed` phase, e.g. "Opened Memory". */
+  completionMessage: string | null;
+  /** Configured AI interpretation mode (off / litellm / openrouter / nemotron). */
+  aiMode: 'off' | 'litellm' | 'openrouter' | 'nemotron';
   start: () => void;
   stop: () => void;
   reset: () => void;
@@ -77,6 +82,8 @@ export function useVoiceRecognition(
   const [action, setAction] = useState<VoiceAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<VoiceTaskResult | null>(null);
+  const [completionMessage, setCompletionMessage] = useState<string | null>(null);
+  const aiMode = useMemo<AIVoiceMode>(() => getVoiceAIMode(), []);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const onActionRef = useRef(onAction);
@@ -92,6 +99,7 @@ export function useVoiceRecognition(
     setInterim('');
     setFinalTranscript('');
     setError(null);
+    setCompletionMessage(null);
     setPhase('idle');
   }, []);
 
@@ -112,26 +120,50 @@ export function useVoiceRecognition(
     setPhase((prev) => (prev === 'listening' || prev === 'transcribing' ? 'idle' : prev));
   }, []);
 
-  const interpret = useCallback((text: string) => {
-    const clean = text.trim();
-    if (!clean) {
-      setPhase('idle');
-      return;
-    }
-    setFinalTranscript(clean);
-    setInterim('');
-    setPhase('interpreting');
-    const parsed = parseVoiceIntent(clean);
-    const routed = routeVoiceIntent(parsed);
-    setIntent(parsed);
-    setAction(routed);
-    onActionRef.current?.(routed);
-    // Phase transition: navigation/fallback are handled by the integrator
-    // (they close the overlay); task actions pause for approval.
-    if (routed.type === 'queue-task' || routed.type === 'review-task') {
-      setPhase('needs_approval');
-    }
-  }, []);
+  const interpret = useCallback(
+    async (text: string) => {
+      const clean = text.trim();
+      if (!clean) {
+        setPhase('idle');
+        return;
+      }
+      setFinalTranscript(clean);
+      setInterim('');
+      setCompletionMessage(null);
+      setPhase('interpreting');
+
+      // Deterministic parser is the default. When an AI mode is configured, try
+      // it first and fall back to deterministic on null/error (aiInterpretIntent
+      // returns null for all modes until a backend is wired).
+      let parsed = parseVoiceIntent(clean);
+      if (aiMode !== 'off') {
+        const ai = await aiInterpretIntent(clean, { mode: aiMode }).catch(() => null);
+        if (ai) parsed = ai;
+      }
+
+      const routed = routeVoiceIntent(parsed);
+      setIntent(parsed);
+      setAction(routed);
+
+      // Phase transition — never leave the machine in 'interpreting'.
+      //  - navigate/fallback → 'completed' with feedback; the integrator fires
+      //    the side-effect via onAction and the overlay auto-closes.
+      //  - queue-task/review-task → 'needs_approval' (user must approve).
+      if (routed.type === 'navigate') {
+        setCompletionMessage(`Opened ${routed.route.label}`);
+        setPhase('completed');
+        onActionRef.current?.(routed);
+      } else if (routed.type === 'fallback') {
+        setCompletionMessage('Opening command palette');
+        setPhase('completed');
+        onActionRef.current?.(routed);
+      } else {
+        setPhase('needs_approval');
+        onActionRef.current?.(routed);
+      }
+    },
+    [aiMode],
+  );
 
   const start = useCallback(() => {
     const Ctor = getRecognitionCtor();
@@ -154,6 +186,7 @@ export function useVoiceRecognition(
     setFinalTranscript('');
     setError(null);
     setLastResult(null);
+    setCompletionMessage(null);
 
     const rec = new Ctor();
     rec.lang = lang;
@@ -199,13 +232,16 @@ export function useVoiceRecognition(
     };
 
     rec.onend = () => {
-      // If we already moved to interpreting/needs_approval, keep that state;
-      // otherwise settle back to idle.
+      // Preserve terminal/paused states set during onresult so feedback and the
+      // approval gate survive the recognition session ending. Crucially, do NOT
+      // preserve 'interpreting' — interpret() always advances to a terminal
+      // state synchronously, so a leftover 'interpreting' means something
+      // failed to advance and must fall back to idle (no stuck THINKING).
       setPhase((prev) => {
         if (
-          prev === 'interpreting' ||
           prev === 'needs_approval' ||
           prev === 'queued' ||
+          prev === 'completed' ||
           prev === 'error'
         ) {
           return prev;
@@ -235,6 +271,7 @@ export function useVoiceRecognition(
   const resolve = useCallback((result: VoiceTaskResult) => {
     setLastResult(result);
     if (result.ok) {
+      setCompletionMessage(null);
       setPhase('queued');
     } else {
       setError(result.error ?? 'task create failed');
@@ -270,6 +307,8 @@ export function useVoiceRecognition(
     supported,
     error,
     lastResult,
+    completionMessage,
+    aiMode,
     start,
     stop,
     reset,

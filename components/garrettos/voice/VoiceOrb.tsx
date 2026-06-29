@@ -13,6 +13,7 @@ const PHASE_ACCENT: Record<VoicePhase, string> = {
   interpreting: 'text-primary',
   needs_approval: 'text-primary',
   queued: 'text-secondary',
+  completed: 'text-secondary',
   error: 'text-error',
   unsupported: 'text-outline',
 };
@@ -24,6 +25,7 @@ const PHASE_GLOW: Record<VoicePhase, string> = {
   interpreting: 'bg-primary/15',
   needs_approval: 'bg-primary/15',
   queued: 'bg-secondary/15',
+  completed: 'bg-secondary/15',
   error: 'bg-error/15',
   unsupported: 'bg-outline/5',
 };
@@ -35,6 +37,7 @@ const PHASE_ICON: Record<VoicePhase, string> = {
   interpreting: 'psychology',
   needs_approval: 'gpp_maybe',
   queued: 'task_alt',
+  completed: 'check_circle',
   error: 'error',
   unsupported: 'mic_off',
 };

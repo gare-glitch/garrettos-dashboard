@@ -5,3 +5,4 @@ export { VoiceActionPreview } from './VoiceActionPreview';
 export { VoiceCommandOverlay } from './VoiceCommandOverlay';
 export { VoiceHotkeyListener } from './VoiceHotkeyListener';
 export { VoiceSettingsPanel } from './VoiceSettingsPanel';
+export { VoiceDebugPanel } from './VoiceDebugPanel';

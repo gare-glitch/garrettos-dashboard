@@ -34,6 +34,10 @@ type VoiceContextValue = {
   intent: VoiceIntent | null;
   action: VoiceAction | null;
   lastResult: VoiceTaskResult | null;
+  /** Human feedback for the `completed` phase, e.g. "Opened Memory". */
+  completionMessage: string | null;
+  /** Configured AI interpretation mode (off / litellm / openrouter / nemotron). */
+  aiMode: 'off' | 'litellm' | 'openrouter' | 'nemotron';
   submitting: boolean;
   approve: () => Promise<void>;
   navigate: () => void;
@@ -66,16 +70,21 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
   // onAction: react immediately to navigation + fallback; task actions pause
   // for approval (the overlay renders the action preview).
+  //  - navigate: push the route. The hook moves to `completed` and the overlay
+  //    shows "Opened X" feedback, then auto-closes (handled in the overlay).
+  //  - fallback: hand the transcript to the command palette; the overlay shows
+  //    "Opening command palette" feedback, then auto-closes.
+  //  - queue-task / review-task: no auto-action; the user approves in the overlay.
+  // NOTE: onAction intentionally does NOT call closeOverlay — that would create a
+  // circular dep (onAction → closeOverlay → rec → onAction). The overlay owns the
+  // completed-phase auto-close.
   const onAction = useCallback(
     (action: VoiceAction) => {
       if (action.type === 'navigate') {
         router.push(action.route.href);
-        setOverlayOpen(false);
       } else if (action.type === 'fallback') {
         openPaletteWithQuery(action.transcript);
-        setOverlayOpen(false);
       }
-      // queue-task / review-task → no auto-action; user approves in the overlay.
     },
     [router, openPaletteWithQuery],
   );
@@ -220,6 +229,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       intent: rec.intent,
       action: rec.action,
       lastResult: rec.lastResult,
+      completionMessage: rec.completionMessage,
+      aiMode: rec.aiMode,
       submitting,
       approve,
       navigate,
@@ -239,6 +250,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       rec.intent,
       rec.action,
       rec.lastResult,
+      rec.completionMessage,
+      rec.aiMode,
       lastCommand,
       overlayOpen,
       start,
@@ -280,6 +293,8 @@ export function useVoice(): VoiceContextValue {
       intent: null,
       action: null,
       lastResult: null,
+      completionMessage: null,
+      aiMode: 'off',
       submitting: false,
       approve: () => Promise.resolve(),
       navigate: () => {},

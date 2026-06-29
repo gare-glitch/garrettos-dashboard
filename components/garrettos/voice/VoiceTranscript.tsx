@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/design-system';
 import { GarrettIcon } from '../GarrettIcon';
+import type { VoicePhase } from '@/lib/garrettos/voice/voice-types';
 
 /**
  * VoiceTranscript — live transcript with interim (muted) + final (bright)
@@ -17,7 +18,7 @@ export function VoiceTranscript({
 }: {
   interim: string;
   finalTranscript: string;
-  phase: 'idle' | 'listening' | 'transcribing' | 'interpreting' | 'needs_approval' | 'queued' | 'error' | 'unsupported';
+  phase: VoicePhase;
   className?: string;
 }) {
   const hasText = Boolean(interim || finalTranscript);

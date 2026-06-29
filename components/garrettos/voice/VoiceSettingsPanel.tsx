@@ -22,7 +22,7 @@ function detectHotkeyLabel(): string {
  * ElevenLabs/Whisper upgrade path. Read-only — no toggles mutate state yet.
  */
 export function VoiceSettingsPanel() {
-  const { supported } = useVoice();
+  const { supported, aiMode } = useVoice();
   const [hotkey, setHotkey] = useState('⌘ / Ctrl + Shift + Space');
 
   useEffect(() => {
@@ -60,6 +60,15 @@ export function VoiceSettingsPanel() {
       value: 'Enabled',
       tone: 'good',
       note: 'Mutating actions require approval. Voice never executes directly.',
+    },
+    {
+      label: 'AI intent mode',
+      value: aiMode === 'off' ? 'Deterministic' : aiMode,
+      tone: aiMode === 'off' ? 'idle' : 'info',
+      note:
+        aiMode === 'off'
+          ? 'Rule-based parser (default). Set GARRETTOS_VOICE_AI_MODE=litellm|openrouter|nemotron for AI routing (not yet wired).'
+          : 'AI router selected but not yet wired — deterministic parser remains active.',
     },
     {
       label: 'ElevenLabs voice (TTS)',

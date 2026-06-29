@@ -17,6 +17,7 @@ export type VoicePhase =
   | 'interpreting'
   | 'needs_approval'
   | 'queued'
+  | 'completed'
   | 'error'
   | 'unsupported';
 
@@ -81,6 +82,8 @@ export function phaseToLegacyState(phase: VoicePhase): VoiceState {
     case 'needs_approval':
     case 'queued':
       return 'thinking';
+    case 'completed':
+      return 'idle';
     case 'error':
       return 'error';
     case 'unsupported':

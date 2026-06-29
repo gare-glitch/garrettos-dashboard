@@ -27,6 +27,7 @@ lib/garrettos/voice/
   voice-types.ts          # VoicePhase, VoiceIntent, VoiceAction, VoiceTaskResult
   intent-parser.ts        # deterministic, local intent parser (no network)
   action-router.ts        # intent → typed action (navigate / queue / review / fallback)
+  ai-intent-router.ts     # AI interpretation placeholder (GARRETTOS_VOICE_AI_MODE, off by default)
   useVoiceRecognition.ts  # Web Speech API engine: interim/final, phase machine, intent parse
 
 components/garrettos/voice/
@@ -34,10 +35,44 @@ components/garrettos/voice/
   VoiceTranscript.tsx     # live interim (muted) + final (bright) transcript
   VoiceIntentCard.tsx     # parsed intent: kind, agent, Composio tools, approval badge
   VoiceActionPreview.tsx  # what will happen + approval buttons
-  VoiceCommandOverlay.tsx # the full overlay (composes the above + typed fallback)
+  VoiceCommandOverlay.tsx # the full overlay (composes the above + typed fallback + completion banner)
+  VoiceDebugPanel.tsx     # compact diagnostics: transcript/intent/action/route/task payload/state/error
   VoiceHotkeyListener.tsx # global Cmd/Ctrl+Shift+Space listener
-  VoiceSettingsPanel.tsx  # Settings card: support, hotkey, Composio, safety, future TTS
+  VoiceSettingsPanel.tsx  # Settings card: support, hotkey, Composio, safety, AI mode, future TTS
 ```
+
+## State machine (executes, never stuck on THINKING)
+
+```
+idle → listening → transcribing → interpreting → { navigate | fallback | queue-task | review-task }
+  navigate/fallback → completed ("Opened Memory" / "Opening command palette") → idle (auto-close ~1s)
+  queue-task/review-task → needs_approval → { approve → queued (task id) | dismiss → idle | error }
+  parser failure / unknown → fallback (command palette prefilled)
+  unsupported browser → unsupported (typed fallback still works)
+```
+
+Navigation intents execute **immediately** (`router.push`) and surface a green
+"Opened X" completion banner before the overlay auto-closes. Task intents show an
+approval gate; approving POSTs to `/api/garrettos/tasks/create` and shows the
+queued task id (or a detailed error on failure — never silent). No phase is left
+on `interpreting` after a final transcript resolves.
+
+## AI interpretation mode
+
+The deterministic parser is the default and always runs. A placeholder AI router
+(`ai-intent-router.ts`) is selected with `GARRETTOS_VOICE_AI_MODE`:
+`off` (default) | `litellm` | `openrouter` | `nemotron`. Non-`off` modes are not
+yet wired — `aiInterpretIntent` returns `null` so the deterministic parser stays
+the source of truth. The active mode is shown in Voice settings and the overlay
+debug panel. Future wiring goes inside `aiInterpretIntent` without changing the
+hook's public surface.
+
+## Debug panel
+
+The overlay footer has a `debug` toggle that reveals `VoiceDebugPanel`: the
+transcript, parsed intent id/kind, action type, target route, the task payload
+that would be POSTed, the current phase, the AI mode, and the last error/result.
+Read-only — it never executes. Useful for confirming the command path is wired.
 
 The M9A `components/garrettos/speech/` primitives (`useBrowserSpeech`, `SpeechOrb`, `VoiceStatusChip`, `VoiceCommandButton`) remain the shared foundation. The `VoiceProvider` (in `speech/`) now wraps `useVoiceRecognition` and is the **single place** a voice intent becomes a side-effect.
 
